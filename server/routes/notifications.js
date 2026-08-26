@@ -35,6 +35,41 @@ router.post('/test-whatsapp', async (req, res) => {
   }
 });
 
+// POST /api/notifications/send-summary - Trigger complete agenda summary to WhatsApp & Email
+router.post('/send-summary', async (req, res) => {
+  try {
+    const { phone, email, date } = req.body;
+    const waResult = await whatsappService.sendDailySummary(date, phone);
+    const emResult = await emailService.sendDailySummaryEmail(date, email);
+
+    res.json({
+      success: waResult.success || emResult.success,
+      message: `Resumen de agenda despachado a WhatsApp (${waResult.recipient}) y Correo (${emResult.recipient})`,
+      data: {
+        whatsapp: waResult,
+        email: emResult
+      }
+    });
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// POST /api/notifications/send-summary-email - Trigger summary specifically to Email
+router.post('/send-summary-email', async (req, res) => {
+  try {
+    const { email, date } = req.body;
+    const result = await emailService.sendDailySummaryEmail(date, email);
+    if (result.success) {
+      res.json({ success: true, message: `Resumen de agenda enviado por correo a ${result.recipient}`, data: result });
+    } else {
+      res.status(500).json({ success: false, error: result.error });
+    }
+  } catch (err) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
 // GET /api/notifications/logs - Get recent logs (optionally filtered by tenantId)
 router.get('/logs', (req, res) => {
   try {

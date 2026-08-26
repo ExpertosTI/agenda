@@ -245,8 +245,143 @@ async function sendTestEmail(customRecipient = null, tenantId = null) {
   }
 }
 
+async function sendDailySummaryEmail(dateStr = null, customRecipient = null) {
+  const targetDate = dateStr || new Date().toISOString().split('T')[0];
+  const events = db.getEvents(targetDate);
+  const config = db.getConfig();
+  const toEmail = customRecipient || config.defaultNotifyEmail || 'ericmiguellaureano036@gmail.com';
+  const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
+
+  const d = new Date(targetDate + 'T12:00:00');
+  const dateFormatted = d.toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  let eventsHtml = '';
+  if (events.length === 0) {
+    eventsHtml = '<p style="color:#94a3b8; font-style:italic; text-align:center; padding:20px;">No tienes compromisos agendados para este día.</p>';
+  } else {
+    events.forEach((evt, idx) => {
+      const tenant = db.getTenantById(evt.tenantId);
+      const icon = evt.icon || '📌';
+      const time = evt.timeDisplay || evt.time;
+      const tenantName = tenant ? tenant.name : 'RENACE';
+      const tenantColor = tenant ? tenant.accentColor || '#6366f1' : '#6366f1';
+
+      let subtasksHtml = '';
+      if (Array.isArray(evt.subtasks) && evt.subtasks.length > 0) {
+        subtasksHtml = '<div style="margin-top:8px; padding-left:10px; border-left:2px solid rgba(255,255,255,0.1);">';
+        evt.subtasks.forEach(st => {
+          subtasksHtml += `<div style="font-size:12px; color:${st.completed ? '#10b981' : '#cbd5e1'}; margin-bottom:3px;">${st.completed ? '✓' : '▫'} ${st.text}</div>`;
+        });
+        subtasksHtml += '</div>';
+      }
+
+      let transitHtml = '';
+      if (evt.transitBefore && evt.transitBefore.text) {
+        transitHtml = `
+          <div style="background:rgba(99,102,241,0.08); border-radius:8px; padding:6px 12px; margin-bottom:8px; font-size:12px; color:#818cf8;">
+            🚗 <em>${evt.transitBefore.text}</em>
+          </div>
+        `;
+      }
+
+      eventsHtml += `
+        ${transitHtml}
+        <div style="background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.08); border-radius:16px; padding:16px; margin-bottom:14px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+            <span style="font-size:12px; font-weight:800; color:#818cf8;">🕒 ${time}</span>
+            <span style="font-size:11px; font-weight:700; color:${tenantColor}; background:rgba(255,255,255,0.06); padding:2px 8px; border-radius:8px;">${tenantName}</span>
+          </div>
+          <div style="font-size:16px; font-weight:800; color:#ffffff; margin-bottom:4px;">${icon} ${evt.title}</div>
+          <div style="font-size:13px; color:#94a3b8;">${evt.tag || ''}</div>
+          ${evt.location ? `<div style="font-size:12px; color:#38bdf8; margin-top:6px;">📍 ${evt.location}</div>` : ''}
+          ${evt.notes ? `<div style="font-size:12px; color:#cbd5e1; margin-top:6px; background:rgba(0,0,0,0.2); padding:6px 10px; border-radius:8px;">📝 ${evt.notes}</div>` : ''}
+          ${subtasksHtml}
+        </div>
+      `;
+    });
+  }
+
+  const html = `
+  <!DOCTYPE html>
+  <html lang="es">
+  <head>
+    <meta charset="utf-8">
+    <style>
+      body { margin:0; padding:0; background-color: #060911; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; color: #f8fafc; }
+      .container { max-width: 560px; margin: 20px auto; background: #0b1120; border: 1px solid rgba(255,255,255,0.1); border-radius: 28px; padding: 32px; box-shadow: 0 25px 60px rgba(0,0,0,0.8); }
+      .header-badge { display: inline-block; background: rgba(99, 102, 241, 0.2); color: #818cf8; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px; padding: 6px 14px; border-radius: 20px; margin-bottom: 14px; }
+      h1 { font-size: 22px; font-weight: 800; color: #ffffff; margin: 0 0 4px 0; }
+      .date-sub { font-size: 14px; font-weight: 700; color: #a855f7; margin-bottom: 20px; text-transform: capitalize; }
+      .btn { display: block; background: linear-gradient(135deg, #6366f1, #a855f7); color: #ffffff !important; text-decoration: none; font-weight: 700; font-size: 14px; padding: 14px 20px; border-radius: 14px; text-align: center; margin-top: 24px; }
+      .footer { font-size: 11px; color: #64748b; margin-top: 26px; text-align: center; border-top: 1px solid rgba(255,255,255,0.06); padding-top: 18px; }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <div class="header-badge">🌟 AGENDA RENACE · RESUMEN DE JORNADA</div>
+      <h1>Resumen de tu Agenda</h1>
+      <div class="date-sub">📅 ${dateFormatted}</div>
+
+      <div style="margin-bottom: 20px;">
+        ${eventsHtml}
+      </div>
+
+      <a href="${appUrl}" class="btn">Abrir Agenda Completa en Vivo</a>
+
+      <div class="footer">
+        🔔 Recibirás alertas automáticas en este correo y en WhatsApp <strong>10m y 5m</strong> antes de cada compromiso.<br><br>
+        Enviado por <strong>Agenda RENACE</strong> · <a href="${appUrl}" style="color:#818cf8; text-decoration:none;">agenda.renace.tech</a>
+      </div>
+    </div>
+  </body>
+  </html>
+  `;
+
+  try {
+    const transporter = createTransporter();
+    const subject = `🌟 [Resumen de Agenda] Tu Planificación para ${dateFormatted}`;
+
+    const info = await transporter.sendMail({
+      from: `"Agenda RENACE" <info@renace.tech>`,
+      to: toEmail,
+      subject: subject,
+      html: html
+    });
+
+    console.log(`[EmailService] Daily summary email sent to ${toEmail}. MessageId: ${info.messageId}`);
+
+    db.addLog({
+      type: 'email_summary',
+      channel: 'Hostinger SMTP',
+      tenantId: 'all',
+      recipient: toEmail,
+      status: 'success',
+      messageId: info.messageId,
+      detail: `Resumen de agenda enviado por correo para fecha ${targetDate}`
+    });
+
+    return { success: true, messageId: info.messageId, recipient: toEmail };
+  } catch (error) {
+    console.error('[EmailService] Failed to send summary email:', error.message);
+
+    db.addLog({
+      type: 'email_summary',
+      channel: 'Hostinger SMTP',
+      tenantId: 'all',
+      recipient: toEmail,
+      status: 'error',
+      error: error.message,
+      detail: `Fallo al enviar resumen de agenda por correo`
+    });
+
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   verifyConnection,
   sendEventReminder,
-  sendTestEmail
+  sendTestEmail,
+  sendDailySummaryEmail
 };
+

@@ -125,7 +125,7 @@ async function sendEventReminder(event, minutesBefore, customPhone = null) {
 async function sendTestWhatsApp(customPhone = null, tenantId = null) {
   const tenant = db.getTenantById(tenantId);
   const config = db.getConfig();
-  const recipientPhone = customPhone || (tenant && tenant.notifyPhone) || config.defaultNotifyPhone || '18093487921';
+  const recipientPhone = customPhone || (tenant && tenant.notifyPhone) || config.defaultNotifyPhone || '18297125844';
   const evoInstance = (tenant && tenant.evoInstance) || config.evoInstance || 'RENACE.TECH';
   const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
 
@@ -162,9 +162,92 @@ async function sendTestWhatsApp(customPhone = null, tenantId = null) {
   }
 }
 
+async function sendDailySummary(dateStr = null, customPhone = null) {
+  const targetDate = dateStr || new Date().toISOString().split('T')[0];
+  const events = db.getEvents(targetDate);
+  const config = db.getConfig();
+  const recipientPhone = customPhone || config.defaultNotifyPhone || '18297125844';
+  const instance = config.evoInstance || 'RENACE.TECH';
+  const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
+
+  const d = new Date(targetDate + 'T12:00:00');
+  const dateFormatted = d.toLocaleDateString('es-DO', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' });
+
+  let msg = `🌟 *AGENDA RENACE · RESUMEN COMPLETO*\n`;
+  msg += `📅 *${dateFormatted.toUpperCase()}*\n`;
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+  if (events.length === 0) {
+    msg += `🌴 _No tienes compromisos agendados para este día._\n\n`;
+  } else {
+    msg += `Tienes *${events.length} compromisos* programados para tu jornada:\n\n`;
+
+    events.forEach((evt, idx) => {
+      const tenant = db.getTenantById(evt.tenantId);
+      const icon = evt.icon || '📌';
+      const time = evt.timeDisplay || evt.time;
+
+      if (evt.transitBefore && evt.transitBefore.text) {
+        msg += `   🚗 _${evt.transitBefore.text}_\n`;
+      }
+
+      msg += `*${idx + 1}. ${icon} ${evt.title}*\n`;
+      msg += `   🕒 *Hora:* ${time}\n`;
+      if (tenant) msg += `   🏢 *Perfil:* ${tenant.name}\n`;
+      if (evt.location) msg += `   📍 *Lugar:* ${evt.location}\n`;
+      if (evt.notes) msg += `   📝 *Detalles:* ${evt.notes}\n`;
+      
+      if (Array.isArray(evt.subtasks) && evt.subtasks.length > 0) {
+        msg += `   📋 *Checklist:*\n`;
+        evt.subtasks.forEach(st => {
+          msg += `      ${st.completed ? '✅' : '▫️'} ${st.text}\n`;
+        });
+      }
+
+      msg += `\n`;
+    });
+  }
+
+  msg += `━━━━━━━━━━━━━━━━━━━━━\n`;
+  msg += `🔔 *Sistema de Alertas:* Recibirás notificaciones automáticas *10m y 5m* antes de cada compromiso.\n\n`;
+  msg += `🌐 *Ver y Gestionar tu Agenda:* ${appUrl}`;
+
+  try {
+    const result = await sendWhatsAppMessage({ number: recipientPhone, text: msg, instance });
+    console.log(`[WhatsAppService] Daily Summary sent to ${recipientPhone} for date ${targetDate}`);
+
+    db.addLog({
+      type: 'whatsapp_summary',
+      channel: 'Evolution API',
+      tenantId: 'all',
+      recipient: recipientPhone,
+      status: 'success',
+      detail: `Resumen de agenda enviado para fecha ${targetDate}`
+    });
+
+    return { success: true, data: result, recipient: recipientPhone };
+  } catch (error) {
+    console.error('[WhatsAppService] Failed to send daily summary:', error.message);
+
+    db.addLog({
+      type: 'whatsapp_summary',
+      channel: 'Evolution API',
+      tenantId: 'all',
+      recipient: recipientPhone,
+      status: 'error',
+      error: error.message,
+      detail: `Fallo al enviar resumen de agenda`
+    });
+
+    return { success: false, error: error.message };
+  }
+}
+
 module.exports = {
   normalizePhone,
   sendWhatsAppMessage,
   sendEventReminder,
-  sendTestWhatsApp
+  sendTestWhatsApp,
+  sendDailySummary
 };
+

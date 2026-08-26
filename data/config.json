@@ -4,11 +4,11 @@
   "smtpSecure": true,
   "smtpUser": "info@renace.tech",
   "smtpFrom": "RENACE Agenda <info@renace.tech>",
-  "defaultNotifyEmail": "info@renace.tech",
+  "defaultNotifyEmail": "ericmiguellaureano036@gmail.com",
   "evoApiUrl": "https://evoapi.renace.tech",
-  "evoApiKey": "B6D711FCDE4D4FD5936544120E713976",
-  "evoInstance": "RENACE.TECH",
-  "defaultNotifyPhone": "18093487921",
+  "evoApiKey": "d66888ea1d791329a97c934ea14014dc41c53e001440f74a",
+  "evoInstance": "catagce-renace",
+  "defaultNotifyPhone": "18297125844",
   "alertMinutesFirst": 10,
   "alertMinutesSecond": 5
 }

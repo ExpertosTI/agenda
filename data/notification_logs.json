@@ -1,0 +1,45 @@
+[
+  {
+    "id": "94544998-bc79-4490-8552-3243016c6ca0",
+    "timestamp": "2026-08-26T06:14:08.751Z",
+    "tenantId": "all",
+    "type": "whatsapp_summary",
+    "channel": "Evolution API",
+    "recipient": "18297125844",
+    "status": "error",
+    "error": "Evolution API Error: Not Found",
+    "detail": "Fallo al enviar resumen de agenda"
+  },
+  {
+    "id": "ba62257b-a044-48f4-9677-6a1af8a9724a",
+    "timestamp": "2026-08-26T06:14:11.665Z",
+    "tenantId": "all",
+    "type": "email_summary",
+    "channel": "Hostinger SMTP",
+    "recipient": "ericmiguellaureano036@gmail.com",
+    "status": "success",
+    "messageId": "<f5da9ca8-0a25-5fc9-937a-3e92ca372ca1@renace.tech>",
+    "detail": "Resumen de agenda enviado por correo para fecha 2026-08-27"
+  },
+  {
+    "id": "c25deec6-d508-4c46-8da3-063e15e1b3b6",
+    "timestamp": "2026-08-26T06:27:09.318Z",
+    "tenantId": "all",
+    "type": "whatsapp_summary",
+    "channel": "Evolution API",
+    "recipient": "18297125844",
+    "status": "success",
+    "detail": "Resumen de agenda enviado para fecha 2026-08-27"
+  },
+  {
+    "id": "3b6f43c9-6165-4b4a-9ab4-7775fdef3481",
+    "timestamp": "2026-08-26T06:27:12.256Z",
+    "tenantId": "all",
+    "type": "email_summary",
+    "channel": "Hostinger SMTP",
+    "recipient": "ericmiguellaureano036@gmail.com",
+    "status": "success",
+    "messageId": "<5fa2ee15-f4d9-7425-5e6f-eb714d72bf2d@renace.tech>",
+    "detail": "Resumen de agenda enviado por correo para fecha 2026-08-27"
+  }
+]
