@@ -1,0 +1,47 @@
+[
+  {
+    "id": "renace",
+    "name": "RENACE Tech",
+    "slug": "renace",
+    "icon": "⚡",
+    "badge": "Principal",
+    "description": "Operaciones corporativas, desarrollo de software y proyectos",
+    "accentColor": "#6366f1",
+    "notifyEmail": "info@renace.tech",
+    "notifyPhone": "18093487921",
+    "evoInstance": "RENACE.TECH",
+    "smtpFrom": "RENACE Agenda <info@renace.tech>",
+    "insforgeSync": true,
+    "createdAt": "2026-08-26T04:34:33.785Z"
+  },
+  {
+    "id": "altamar",
+    "name": "Altamar Restaurante",
+    "slug": "altamar",
+    "icon": "🍽️",
+    "badge": "Operaciones",
+    "description": "Supervisión de cocina, pedidos, proveedores y compras",
+    "accentColor": "#10b981",
+    "notifyEmail": "info@renace.tech",
+    "notifyPhone": "18093487921",
+    "evoInstance": "RENACE.TECH",
+    "smtpFrom": "Altamar Agenda <info@renace.tech>",
+    "insforgeSync": true,
+    "createdAt": "2026-08-26T04:34:33.786Z"
+  },
+  {
+    "id": "personal",
+    "name": "Dirección & Personal",
+    "slug": "personal",
+    "icon": "👤",
+    "badge": "Personal",
+    "description": "Ruta diaria, cuidado personal, entrevistas y reuniones",
+    "accentColor": "#a855f7",
+    "notifyEmail": "info@renace.tech",
+    "notifyPhone": "18093487921",
+    "evoInstance": "RENACE.TECH",
+    "smtpFrom": "Agenda Personal <info@renace.tech>",
+    "insforgeSync": true,
+    "createdAt": "2026-08-26T04:34:33.786Z"
+  }
+]

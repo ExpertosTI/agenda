@@ -32,9 +32,11 @@ async function verifyConnection() {
   }
 }
 
-function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
-  const config = db.getConfig();
+function buildHtmlTemplate({ event, tenant, minutesBefore, isTest = false }) {
   const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
+  const tenantName = tenant ? tenant.name : 'RENACE Tech';
+  const tenantIcon = tenant ? tenant.icon : '⚡';
+  const tenantColor = tenant ? tenant.accentColor || '#6366f1' : '#6366f1';
   
   if (isTest) {
     return `
@@ -55,16 +57,17 @@ function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
     </head>
     <body>
       <div class="container">
-        <div class="badge">⚡ RENACE TECH · AGENDA</div>
+        <div class="badge">${tenantIcon} ${tenantName} · AGENDA MULTI-TENANT</div>
         <h1>Prueba de Notificación Exitosa</h1>
-        <p>Tu servidor SMTP de Hostinger (<code>info@renace.tech</code>) está correctamente configurado y listo para despachar alertas de compromisos a los 10m y 5m.</p>
+        <p>Tu servidor SMTP de Hostinger (<code>info@renace.tech</code>) está correctamente configurado y listo para despachar alertas de compromisos a los 10m y 5m para el perfil <strong>${tenantName}</strong>.</p>
         <div class="status-box">
-          ✓ Conexión establecida · Hostinger SMTP Port 465 (SSL)<br>
+          ✓ Hostinger SMTP SSL (Port 465)<br>
+          ✓ Tenant: ${tenantName} (${tenant ? tenant.id : 'global'})<br>
           ✓ Fecha y Hora: ${new Date().toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo' })}
         </div>
         <a href="${appUrl}" class="btn">Abrir Agenda Móvil</a>
         <div class="footer">
-          Powered by <strong>RENACE Tech</strong> · Sistema de Productividad & Agenda
+          Powered by <strong>RENACE Tech</strong> & <strong>Insforge DB</strong>
         </div>
       </div>
     </body>
@@ -84,11 +87,11 @@ function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
     <style>
       body { margin:0; padding:0; background-color: #090d16; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; color: #f8fafc; }
       .container { max-width: 520px; margin: 20px auto; background: #0f172a; border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; padding: 28px; box-shadow: 0 20px 40px rgba(0,0,0,0.7); }
+      .tenant-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; }
+      .tenant-badge { font-size: 12px; font-weight: 800; color: ${tenantColor}; background: rgba(255,255,255,0.06); padding: 4px 10px; border-radius: 12px; }
       .alert-badge { display: inline-block; background: ${badgeBg}; color: ${badgeColor}; font-size: 12px; font-weight: 800; text-transform: uppercase; letter-spacing: 0.8px; padding: 6px 14px; border-radius: 20px; border: 1px solid ${badgeBorder}; margin-bottom: 18px; }
       h1 { font-size: 22px; font-weight: 800; margin: 0 0 16px 0; color: #ffffff; }
       .card { background: rgba(255, 255, 255, 0.04); border: 1px solid rgba(255, 255, 255, 0.08); border-radius: 20px; padding: 20px; margin-bottom: 22px; }
-      .card-header { display: flex; align-items: center; gap: 14px; margin-bottom: 12px; }
-      .icon-box { font-size: 28px; background: rgba(255,255,255,0.06); width: 50px; height: 50px; border-radius: 14px; display: flex; align-items: center; justify-content: center; border: 1px solid rgba(255,255,255,0.1); }
       .time-highlight { font-size: 14px; font-weight: 800; color: #818cf8; text-transform: uppercase; letter-spacing: 0.5px; margin-bottom: 4px; }
       .title-highlight { font-size: 18px; font-weight: 800; color: #ffffff; }
       .tag-text { font-size: 13px; color: #94a3b8; margin-top: 4px; }
@@ -100,7 +103,10 @@ function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
   </head>
   <body>
     <div class="container">
-      <div class="alert-badge">⏰ ALERTA: FALTAN ${minutesBefore} MINUTOS</div>
+      <div class="tenant-header">
+        <span class="tenant-badge">${tenantIcon} ${tenantName}</span>
+        <div class="alert-badge">⏰ ALERTA: FALTAN ${minutesBefore} MINUTOS</div>
+      </div>
       <h1>Próximo Compromiso en tu Agenda</h1>
       
       <div class="card">
@@ -125,10 +131,10 @@ function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
         ` : ''}
       </div>
 
-      <a href="${appUrl}" class="btn">Ver en Agenda Móvil</a>
+      <a href="${appUrl}?tenant=${tenant ? tenant.id : 'renace'}" class="btn">Ver en Agenda Móvil</a>
 
       <div class="footer">
-        Enviado automáticamente por <strong>RENACE Tech Agenda</strong> (<a href="${appUrl}" style="color:#818cf8; text-decoration:none;">agenda.renace.tech</a>)<br>
+        Enviado automáticamente por <strong>${tenantName} Agenda</strong> (<a href="${appUrl}" style="color:#818cf8; text-decoration:none;">agenda.renace.tech</a>)<br>
         Desde: <code>info@renace.tech</code>
       </div>
     </div>
@@ -138,33 +144,36 @@ function buildHtmlTemplate({ event, minutesBefore, isTest = false }) {
 }
 
 async function sendEventReminder(event, minutesBefore, customRecipient = null) {
+  const tenant = db.getTenantById(event.tenantId);
   const config = db.getConfig();
-  const toEmail = customRecipient || config.defaultNotifyEmail || 'info@renace.tech';
+  const toEmail = customRecipient || (tenant && tenant.notifyEmail) || config.defaultNotifyEmail || 'info@renace.tech';
+  const fromName = tenant ? `${tenant.name} Agenda` : 'RENACE Agenda';
 
   try {
     const transporter = createTransporter();
-    const subject = `⏰ [${minutesBefore}m] Recordatorio: ${event.icon || ''} ${event.title} (${event.timeDisplay || event.time})`;
-    const html = buildHtmlTemplate({ event, minutesBefore });
+    const subject = `⏰ [${minutesBefore}m] ${tenant ? `[${tenant.name}] ` : ''}${event.icon || ''} ${event.title} (${event.timeDisplay || event.time})`;
+    const html = buildHtmlTemplate({ event, tenant, minutesBefore });
 
     const info = await transporter.sendMail({
-      from: config.smtpFrom || '"RENACE Agenda" <info@renace.tech>',
+      from: `"${fromName}" <info@renace.tech>`,
       to: toEmail,
       subject: subject,
       html: html
     });
 
-    console.log(`[EmailService] Reminder sent for "${event.title}" (${minutesBefore}m) to ${toEmail}. MessageId: ${info.messageId}`);
+    console.log(`[EmailService] Reminder sent for "${event.title}" [Tenant: ${tenant ? tenant.id : 'default'}] (${minutesBefore}m) to ${toEmail}. MessageId: ${info.messageId}`);
     
     db.addLog({
       type: 'email',
       channel: 'Hostinger SMTP',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: toEmail,
       eventId: event.id,
       eventTitle: event.title,
       minutesBefore: minutesBefore,
       status: 'success',
       messageId: info.messageId,
-      detail: `Correo de aviso a los ${minutesBefore}m enviado exitosamente`
+      detail: `Correo a los ${minutesBefore}m enviado para ${tenant ? tenant.name : 'RENACE'}`
     });
 
     return { success: true, messageId: info.messageId };
@@ -174,6 +183,7 @@ async function sendEventReminder(event, minutesBefore, customRecipient = null) {
     db.addLog({
       type: 'email',
       channel: 'Hostinger SMTP',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: toEmail,
       eventId: event.id,
       eventTitle: event.title,
@@ -187,17 +197,19 @@ async function sendEventReminder(event, minutesBefore, customRecipient = null) {
   }
 }
 
-async function sendTestEmail(customRecipient = null) {
+async function sendTestEmail(customRecipient = null, tenantId = null) {
+  const tenant = db.getTenantById(tenantId);
   const config = db.getConfig();
-  const toEmail = customRecipient || config.defaultNotifyEmail || 'info@renace.tech';
+  const toEmail = customRecipient || (tenant && tenant.notifyEmail) || config.defaultNotifyEmail || 'info@renace.tech';
+  const fromName = tenant ? `${tenant.name} Agenda` : 'RENACE Agenda';
 
   try {
     const transporter = createTransporter();
-    const subject = `✅ [Prueba] Conexión SMTP Exitosa - Agenda RENACE`;
-    const html = buildHtmlTemplate({ isTest: true });
+    const subject = `✅ [Prueba Multi-Tenant] Conexión SMTP Exitosa - ${tenant ? tenant.name : 'Agenda RENACE'}`;
+    const html = buildHtmlTemplate({ tenant, isTest: true });
 
     const info = await transporter.sendMail({
-      from: config.smtpFrom || '"RENACE Agenda" <info@renace.tech>',
+      from: `"${fromName}" <info@renace.tech>`,
       to: toEmail,
       subject: subject,
       html: html
@@ -208,6 +220,7 @@ async function sendTestEmail(customRecipient = null) {
     db.addLog({
       type: 'email_test',
       channel: 'Hostinger SMTP',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: toEmail,
       status: 'success',
       messageId: info.messageId,
@@ -221,6 +234,7 @@ async function sendTestEmail(customRecipient = null) {
     db.addLog({
       type: 'email_test',
       channel: 'Hostinger SMTP',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: toEmail,
       status: 'error',
       error: error.message,

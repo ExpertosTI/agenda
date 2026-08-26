@@ -3,12 +3,13 @@ const router = express.Router();
 const db = require('../db');
 const emailService = require('../services/emailService');
 const whatsappService = require('../services/whatsappService');
+const insforgeService = require('../services/insforgeService');
 
-// POST /api/notifications/test-email - Trigger instant test email
+// POST /api/notifications/test-email - Trigger instant test email (tenant specific)
 router.post('/test-email', async (req, res) => {
   try {
-    const { recipient } = req.body;
-    const result = await emailService.sendTestEmail(recipient);
+    const { recipient, tenantId } = req.body;
+    const result = await emailService.sendTestEmail(recipient, tenantId);
     if (result.success) {
       res.json({ success: true, message: `Correo de prueba enviado con éxito a ${result.recipient}`, data: result });
     } else {
@@ -19,11 +20,11 @@ router.post('/test-email', async (req, res) => {
   }
 });
 
-// POST /api/notifications/test-whatsapp - Trigger instant test WhatsApp
+// POST /api/notifications/test-whatsapp - Trigger instant test WhatsApp (tenant specific)
 router.post('/test-whatsapp', async (req, res) => {
   try {
-    const { phone } = req.body;
-    const result = await whatsappService.sendTestWhatsApp(phone);
+    const { phone, tenantId } = req.body;
+    const result = await whatsappService.sendTestWhatsApp(phone, tenantId);
     if (result.success) {
       res.json({ success: true, message: `WhatsApp de prueba enviado con éxito a ${result.recipient}`, data: result });
     } else {
@@ -34,22 +35,24 @@ router.post('/test-whatsapp', async (req, res) => {
   }
 });
 
-// GET /api/notifications/logs - Get recent notification dispatch logs
+// GET /api/notifications/logs - Get recent logs (optionally filtered by tenantId)
 router.get('/logs', (req, res) => {
   try {
     const limit = parseInt(req.query.limit || '50', 10);
-    const logs = db.getLogs(limit);
+    const { tenantId } = req.query;
+    const logs = db.getLogs(limit, tenantId);
     res.json({ success: true, count: logs.length, data: logs });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
-// GET /api/notifications/status - Check health of both notification channels
+// GET /api/notifications/status - Check health of notification channels & Insforge
 router.get('/status', async (req, res) => {
   try {
     const emailHealth = await emailService.verifyConnection();
     const config = db.getConfig();
+    const insforgeStatus = await insforgeService.getStatus();
     
     // Check Evolution API reachability
     let evoHealth = { success: false, message: 'No comprobado' };
@@ -72,6 +75,7 @@ router.get('/status', async (req, res) => {
       data: {
         email: emailHealth,
         whatsapp: evoHealth,
+        insforge: insforgeStatus,
         schedulerActive: true
       }
     });

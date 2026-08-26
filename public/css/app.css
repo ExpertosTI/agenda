@@ -1,5 +1,5 @@
 /* =========================================================
-   AGENDA RENACE - MODERN FLUID PWA DESIGN SYSTEM
+   AGENDA RENACE - MODERN FLUID MULTI-TENANT PWA
    Theme: RENACE Dark Vibrant
    ========================================================= */
 
@@ -65,10 +65,53 @@ body {
   -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border);
   border-radius: var(--radius-xl);
-  padding: 22px 18px 26px 18px;
+  padding: 20px 18px 26px 18px;
   box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.8), 0 0 35px -10px rgba(99, 102, 241, 0.15);
   position: relative;
   transition: all 0.3s ease;
+}
+
+/* Top Multi-Tenant Bar */
+.tenant-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  margin-bottom: 14px;
+  scrollbar-width: none;
+}
+
+.tenant-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.tenant-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: 20px;
+  background: var(--bg-subtle);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.tenant-pill:hover {
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+
+.tenant-pill.active {
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.3), rgba(168, 85, 247, 0.2));
+  border-color: var(--accent-light);
+  color: #fff;
+  box-shadow: 0 4px 14px rgba(99, 102, 241, 0.25);
 }
 
 /* Header */
@@ -76,7 +119,7 @@ header {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
 }
 
 .header-meta {
@@ -88,13 +131,13 @@ header {
   display: inline-flex;
   align-items: center;
   gap: 6px;
-  font-size: 0.75rem;
+  font-size: 0.72rem;
   font-weight: 800;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: var(--accent-light);
   background: rgba(99, 102, 241, 0.12);
-  padding: 5px 12px;
+  padding: 4px 10px;
   border-radius: 20px;
   border: 1px solid rgba(99, 102, 241, 0.25);
   width: fit-content;
@@ -102,7 +145,7 @@ header {
 }
 
 h1 {
-  font-size: 1.65rem;
+  font-size: 1.6rem;
   font-weight: 800;
   letter-spacing: -0.03em;
   background: linear-gradient(135deg, #ffffff 40%, #cbd5e1 100%);
@@ -117,8 +160,8 @@ h1 {
 }
 
 .icon-btn {
-  width: 42px;
-  height: 42px;
+  width: 40px;
+  height: 40px;
   border-radius: 14px;
   background: var(--bg-subtle);
   border: 1px solid var(--border);
@@ -150,7 +193,7 @@ h1 {
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   padding: 4px;
-  margin-bottom: 18px;
+  margin-bottom: 16px;
   gap: 4px;
 }
 
@@ -204,8 +247,8 @@ h1 {
   background: linear-gradient(135deg, rgba(99, 102, 241, 0.14), rgba(168, 85, 247, 0.06));
   border: 1px solid rgba(99, 102, 241, 0.25);
   border-radius: var(--radius-lg);
-  padding: 16px 18px;
-  margin-bottom: 22px;
+  padding: 14px 18px;
+  margin-bottom: 18px;
   box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
 }
 
@@ -215,7 +258,7 @@ h1 {
   align-items: center;
   font-size: 0.85rem;
   font-weight: 700;
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .progress-header span:first-child {
@@ -231,7 +274,7 @@ h1 {
 }
 
 .progress-bar {
-  height: 9px;
+  height: 8px;
   background: rgba(255, 255, 255, 0.07);
   border-radius: 10px;
   overflow: hidden;
@@ -313,6 +356,22 @@ h1 {
   opacity: 0.6;
 }
 
+/* Tenant tag pill inside card */
+.card-tenant-tag {
+  font-size: 0.65rem;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding: 2px 7px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+}
+
 /* Countdown Tag Badges */
 .countdown-tag {
   font-size: 0.68rem;
@@ -324,7 +383,6 @@ h1 {
   display: inline-flex;
   align-items: center;
   gap: 4px;
-  margin-left: 6px;
   vertical-align: middle;
 }
 
@@ -339,12 +397,6 @@ h1 {
   background: rgba(245, 158, 11, 0.2);
   color: #fbbf24;
   border: 1px solid rgba(245, 158, 11, 0.4);
-}
-
-.badge-in-progress {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.4);
 }
 
 .badge-scheduled {
@@ -382,7 +434,7 @@ h1 {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   margin-bottom: 3px;
 }
 
@@ -738,6 +790,19 @@ h1 {
   font-weight: 600;
   cursor: pointer;
   margin-top: 8px;
+}
+
+/* Insforge Status Box */
+.insforge-box {
+  background: rgba(99, 102, 241, 0.08);
+  border: 1px solid rgba(99, 102, 241, 0.2);
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 16px;
+  font-size: 0.8rem;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 
 /* Toast Messages */

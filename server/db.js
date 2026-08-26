@@ -9,10 +9,62 @@ if (!fs.existsSync(DATA_DIR)) {
 }
 
 const EVENTS_FILE = path.join(DATA_DIR, 'events.json');
+const TENANTS_FILE = path.join(DATA_DIR, 'tenants.json');
 const CONFIG_FILE = path.join(DATA_DIR, 'config.json');
 const LOGS_FILE = path.join(DATA_DIR, 'notification_logs.json');
 
-// Default initial events based on prototype
+// Default initial tenants
+function getInitialTenants() {
+  return [
+    {
+      id: 'renace',
+      name: 'RENACE Tech',
+      slug: 'renace',
+      icon: '⚡',
+      badge: 'Principal',
+      description: 'Operaciones corporativas, desarrollo de software y proyectos',
+      accentColor: '#6366f1',
+      notifyEmail: 'info@renace.tech',
+      notifyPhone: '18093487921',
+      evoInstance: 'RENACE.TECH',
+      smtpFrom: 'RENACE Agenda <info@renace.tech>',
+      insforgeSync: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'altamar',
+      name: 'Altamar Restaurante',
+      slug: 'altamar',
+      icon: '🍽️',
+      badge: 'Operaciones',
+      description: 'Supervisión de cocina, pedidos, proveedores y compras',
+      accentColor: '#10b981',
+      notifyEmail: 'info@renace.tech',
+      notifyPhone: '18093487921',
+      evoInstance: 'RENACE.TECH',
+      smtpFrom: 'Altamar Agenda <info@renace.tech>',
+      insforgeSync: true,
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'personal',
+      name: 'Dirección & Personal',
+      slug: 'personal',
+      icon: '👤',
+      badge: 'Personal',
+      description: 'Ruta diaria, cuidado personal, entrevistas y reuniones',
+      accentColor: '#a855f7',
+      notifyEmail: 'info@renace.tech',
+      notifyPhone: '18093487921',
+      evoInstance: 'RENACE.TECH',
+      smtpFrom: 'Agenda Personal <info@renace.tech>',
+      insforgeSync: true,
+      createdAt: new Date().toISOString()
+    }
+  ];
+}
+
+// Default initial events
 function getInitialEvents() {
   const today = new Date();
   const dateStr = today.toISOString().split('T')[0];
@@ -20,6 +72,7 @@ function getInitialEvents() {
   return [
     {
       id: uuidv4(),
+      tenantId: 'personal',
       date: dateStr,
       time: '06:00',
       timeDisplay: '06:00 AM',
@@ -39,6 +92,7 @@ function getInitialEvents() {
     },
     {
       id: uuidv4(),
+      tenantId: 'personal',
       date: dateStr,
       time: '08:30',
       timeDisplay: '08:30 AM',
@@ -58,6 +112,7 @@ function getInitialEvents() {
     },
     {
       id: uuidv4(),
+      tenantId: 'renace',
       date: dateStr,
       time: '10:00',
       timeDisplay: '10:00 AM',
@@ -81,6 +136,7 @@ function getInitialEvents() {
     },
     {
       id: uuidv4(),
+      tenantId: 'altamar',
       date: dateStr,
       time: '11:30',
       timeDisplay: '11:30 AM',
@@ -104,6 +160,7 @@ function getInitialEvents() {
     },
     {
       id: uuidv4(),
+      tenantId: 'renace',
       date: dateStr,
       time: '12:45',
       timeDisplay: '12:45 PM',
@@ -127,6 +184,7 @@ function getInitialEvents() {
     },
     {
       id: uuidv4(),
+      tenantId: 'renace',
       date: dateStr,
       time: '14:00',
       timeDisplay: '02:00 PM',
@@ -147,7 +205,6 @@ function getInitialEvents() {
   ];
 }
 
-// Read JSON helper
 function readJson(filePath, defaultValue) {
   try {
     if (!fs.existsSync(filePath)) {
@@ -162,7 +219,6 @@ function readJson(filePath, defaultValue) {
   }
 }
 
-// Write JSON helper
 function writeJson(filePath, data) {
   try {
     const tempPath = `${filePath}.tmp`;
@@ -173,12 +229,88 @@ function writeJson(filePath, data) {
   }
 }
 
-// Events DB methods
-function getEvents(filterDate = null) {
+// ---------------- TENANTS ----------------
+function getTenants() {
+  return readJson(TENANTS_FILE, getInitialTenants());
+}
+
+function getTenantById(id) {
+  const tenants = getTenants();
+  return tenants.find(t => t.id === id || t.slug === id) || tenants[0];
+}
+
+function saveTenant(tenantData) {
+  const tenants = getTenants();
+  const newTenant = {
+    id: tenantData.id || uuidv4(),
+    slug: tenantData.slug || (tenantData.name || 'tenant').toLowerCase().replace(/[^a-z0-9]/g, '-'),
+    name: tenantData.name || 'Nuevo Tenant',
+    icon: tenantData.icon || '🏢',
+    badge: tenantData.badge || 'Cliente',
+    description: tenantData.description || '',
+    accentColor: tenantData.accentColor || '#6366f1',
+    notifyEmail: tenantData.notifyEmail || 'info@renace.tech',
+    notifyPhone: tenantData.notifyPhone || '18093487921',
+    evoInstance: tenantData.evoInstance || 'RENACE.TECH',
+    smtpFrom: tenantData.smtpFrom || `${tenantData.name} <info@renace.tech>`,
+    insforgeSync: tenantData.insforgeSync !== false,
+    createdAt: new Date().toISOString()
+  };
+
+  tenants.push(newTenant);
+  writeJson(TENANTS_FILE, tenants);
+  return newTenant;
+}
+
+function updateTenant(id, updateData) {
+  const tenants = getTenants();
+  const idx = tenants.findIndex(t => t.id === id || t.slug === id);
+  if (idx === -1) return null;
+
+  tenants[idx] = {
+    ...tenants[idx],
+    ...updateData,
+    updatedAt: new Date().toISOString()
+  };
+
+  writeJson(TENANTS_FILE, tenants);
+  return tenants[idx];
+}
+
+function deleteTenant(id) {
+  let tenants = getTenants();
+  if (tenants.length <= 1) return false; // Prevent deleting last tenant
+  tenants = tenants.filter(t => t.id !== id && t.slug !== id);
+  writeJson(TENANTS_FILE, tenants);
+  return true;
+}
+
+// ---------------- EVENTS ----------------
+function getEvents(filterDate = null, tenantId = null) {
   let events = readJson(EVENTS_FILE, getInitialEvents());
+  
+  // Ensure tenantId exists on legacy events
+  events = events.map(e => {
+    if (!e.tenantId) {
+      if ((e.title || '').toLowerCase().includes('altamar')) {
+        e.tenantId = 'altamar';
+      } else if ((e.title || '').toLowerCase().includes('bicicleta') || (e.title || '').toLowerCase().includes('peluquer')) {
+        e.tenantId = 'personal';
+      } else {
+        e.tenantId = 'renace';
+      }
+    }
+    return e;
+  });
+
+  if (tenantId && tenantId !== 'all') {
+    events = events.filter(e => (e.tenantId || 'renace') === tenantId);
+  }
+  
   if (filterDate) {
     events = events.filter(e => e.date === filterDate);
   }
+  
   return events.sort((a, b) => (a.time || '').localeCompare(b.time || ''));
 }
 
@@ -191,6 +323,7 @@ function saveEvent(eventData) {
   const events = readJson(EVENTS_FILE, []);
   const newEvent = {
     id: eventData.id || uuidv4(),
+    tenantId: eventData.tenantId || 'renace',
     date: eventData.date || new Date().toISOString().split('T')[0],
     time: eventData.time || '12:00',
     timeDisplay: eventData.timeDisplay || formatTimeDisplay(eventData.time || '12:00'),
@@ -228,7 +361,6 @@ function updateEvent(id, updateData) {
     updatedAt: new Date().toISOString()
   };
 
-  // If time or date changed, reset notification flags
   if (updateData.time && updateData.time !== existing.time || updateData.date && updateData.date !== existing.date) {
     updated.notified_10m = false;
     updated.notified_5m = false;
@@ -258,9 +390,10 @@ function toggleEventCompleted(id) {
   return event;
 }
 
-// Config DB methods
+// ---------------- CONFIG ----------------
 function getConfig() {
   const defaultConfig = {
+    appName: 'Agenda RENACE Multi-Tenant',
     smtpHost: process.env.SMTP_HOST || 'smtp.hostinger.com',
     smtpPort: parseInt(process.env.SMTP_PORT || '465', 10),
     smtpSecure: process.env.SMTP_SECURE !== 'false',
@@ -271,6 +404,8 @@ function getConfig() {
     evoApiKey: process.env.EVO_API_KEY || 'B6D711FCDE4D4FD5936544120E713976',
     evoInstance: process.env.EVO_INSTANCE || 'RENACE.TECH',
     defaultNotifyPhone: process.env.DEFAULT_NOTIFY_PHONE || '18093487921',
+    insforgeApiUrl: process.env.INSFORGE_API_URL || 'https://insforge.renace.tech/api',
+    insforgeApiKey: process.env.INSFORGE_API_KEY || '',
     alertMinutesFirst: parseInt(process.env.ALERT_MINUTES_FIRST || '10', 10),
     alertMinutesSecond: parseInt(process.env.ALERT_MINUTES_SECOND || '5', 10)
   };
@@ -285,9 +420,12 @@ function updateConfig(newConfig) {
   return updated;
 }
 
-// Logs DB methods
-function getLogs(limit = 50) {
-  const logs = readJson(LOGS_FILE, []);
+// ---------------- LOGS ----------------
+function getLogs(limit = 50, tenantId = null) {
+  let logs = readJson(LOGS_FILE, []);
+  if (tenantId && tenantId !== 'all') {
+    logs = logs.filter(l => l.tenantId === tenantId);
+  }
   return logs.slice(-limit).reverse();
 }
 
@@ -296,11 +434,12 @@ function addLog(logEntry) {
   const entry = {
     id: uuidv4(),
     timestamp: new Date().toISOString(),
+    tenantId: logEntry.tenantId || 'renace',
     ...logEntry
   };
   logs.push(entry);
-  if (logs.length > 200) {
-    logs.splice(0, logs.length - 200);
+  if (logs.length > 300) {
+    logs.splice(0, logs.length - 300);
   }
   writeJson(LOGS_FILE, logs);
   return entry;
@@ -320,6 +459,11 @@ function formatTimeDisplay(timeStr) {
 }
 
 module.exports = {
+  getTenants,
+  getTenantById,
+  saveTenant,
+  updateTenant,
+  deleteTenant,
   getEvents,
   getEventById,
   saveEvent,

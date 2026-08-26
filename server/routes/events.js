@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const db = require('../db');
+const insforgeService = require('../services/insforgeService');
 const { calculateMinutesRemaining, parseEventDateTime } = require('../services/schedulerService');
 
-// GET /api/events - List all events (optionally filter by date)
+// GET /api/events - List events (filtered by date and/or tenantId)
 router.get('/', (req, res) => {
   try {
-    const { date } = req.query;
-    const events = db.getEvents(date);
+    const { date, tenantId } = req.query;
+    const events = db.getEvents(date, tenantId);
     
     // Add real-time countdown metadata to each event
     const enriched = events.map(evt => {
@@ -32,8 +33,12 @@ router.get('/', (req, res) => {
         }
       }
 
+      const tenant = db.getTenantById(evt.tenantId);
+
       return {
         ...evt,
+        tenantName: tenant ? tenant.name : 'RENACE',
+        tenantIcon: tenant ? tenant.icon : '⚡',
         minutesLeft,
         statusLabel
       };
@@ -52,22 +57,26 @@ router.get('/:id', (req, res) => {
     if (!event) {
       return res.status(404).json({ success: false, error: 'Compromiso no encontrado' });
     }
-    res.json({ success: true, data: event });
+    const tenant = db.getTenantById(event.tenantId);
+    res.json({ success: true, data: { ...event, tenantName: tenant ? tenant.name : 'RENACE' } });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
   }
 });
 
 // POST /api/events - Create new event
-router.post('/', (req, res) => {
+router.post('/', async (req, res) => {
   try {
-    const { title, date, time, tag, icon, transitBefore, notes, location, notifyEmail, notifyWhatsApp } = req.body;
+    const { tenantId, title, date, time, tag, icon, transitBefore, notes, location, notifyEmail, notifyWhatsApp } = req.body;
     
     if (!title || !time) {
       return res.status(400).json({ success: false, error: 'Título y hora son obligatorios' });
     }
 
+    const targetTenant = tenantId || req.headers['x-tenant-id'] || 'renace';
+
     const newEvent = db.saveEvent({
+      tenantId: targetTenant,
       title,
       date: date || new Date().toISOString().split('T')[0],
       time,
@@ -80,6 +89,9 @@ router.post('/', (req, res) => {
       notifyWhatsApp: notifyWhatsApp !== false
     });
 
+    // Async Insforge sync
+    insforgeService.syncEvent(newEvent, targetTenant).catch(() => {});
+
     res.status(201).json({ success: true, message: 'Compromiso creado exitosamente', data: newEvent });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -87,12 +99,16 @@ router.post('/', (req, res) => {
 });
 
 // PUT /api/events/:id - Update event
-router.put('/:id', (req, res) => {
+router.put('/:id', async (req, res) => {
   try {
     const updated = db.updateEvent(req.params.id, req.body);
     if (!updated) {
       return res.status(404).json({ success: false, error: 'Compromiso no encontrado' });
     }
+
+    // Async Insforge sync
+    insforgeService.syncEvent(updated, updated.tenantId).catch(() => {});
+
     res.json({ success: true, message: 'Compromiso actualizado', data: updated });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });
@@ -100,12 +116,16 @@ router.put('/:id', (req, res) => {
 });
 
 // PATCH /api/events/:id/toggle - Toggle completed status
-router.patch('/:id/toggle', (req, res) => {
+router.patch('/:id/toggle', async (req, res) => {
   try {
     const event = db.toggleEventCompleted(req.params.id);
     if (!event) {
       return res.status(404).json({ success: false, error: 'Compromiso no encontrado' });
     }
+
+    // Async Insforge sync
+    insforgeService.syncEvent(event, event.tenantId).catch(() => {});
+
     res.json({ success: true, data: event });
   } catch (err) {
     res.status(500).json({ success: false, error: err.message });

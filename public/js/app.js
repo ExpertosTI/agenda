@@ -1,5 +1,7 @@
-// Agenda RENACE - Frontend Application Logic
+// Agenda RENACE - Multi-Tenant Frontend Application Logic
 
+let currentTenantId = 'all'; // 'all', 'renace', 'altamar', 'personal', etc.
+let tenantsList = [];
 let currentDate = new Date().toISOString().split('T')[0];
 let eventsList = [];
 let editingEventId = null;
@@ -7,11 +9,20 @@ let selectedIcon = '📌';
 let liveTickerInterval = null;
 
 // Initialize app
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   initServiceWorker();
   initDateSelectors();
   initIconSelectors();
   initEventListeners();
+  
+  // Read tenant from URL if present
+  const urlParams = new URLSearchParams(window.location.search);
+  const tenantParam = urlParams.get('tenant');
+  if (tenantParam) {
+    currentTenantId = tenantParam;
+  }
+
+  await loadTenants();
   loadEvents();
   loadConfig();
   
@@ -27,6 +38,76 @@ function initServiceWorker() {
         .then((reg) => console.log('[PWA] Service Worker registrado:', reg.scope))
         .catch((err) => console.warn('[PWA] Error registrando Service Worker:', err));
     });
+  }
+}
+
+// ---------------- TENANTS ----------------
+async function loadTenants() {
+  try {
+    const res = await window.api.getTenants();
+    tenantsList = res.data || [];
+    renderTenantBar();
+    populateTenantSelectors();
+  } catch (err) {
+    console.warn('Error loading tenants:', err);
+  }
+}
+
+function renderTenantBar() {
+  const container = document.getElementById('tenant-bar');
+  if (!container) return;
+
+  container.innerHTML = `
+    <button class="tenant-pill ${currentTenantId === 'all' ? 'active' : ''}" data-tenant="all" onclick="selectTenant('all')">
+      <span>🌐 Todos</span>
+    </button>
+  `;
+
+  tenantsList.forEach(t => {
+    const active = currentTenantId === t.id ? 'active' : '';
+    const btn = document.createElement('button');
+    btn.className = `tenant-pill ${active}`;
+    btn.dataset.tenant = t.id;
+    btn.onclick = () => selectTenant(t.id);
+    btn.innerHTML = `<span>${t.icon || '🏢'} ${t.name}</span>`;
+    container.appendChild(btn);
+  });
+}
+
+function selectTenant(tenantId) {
+  currentTenantId = tenantId;
+  window.currentTenantId = tenantId;
+
+  // Update URL without reload
+  const url = new URL(window.location);
+  if (tenantId === 'all') {
+    url.searchParams.delete('tenant');
+  } else {
+    url.searchParams.set('tenant', tenantId);
+  }
+  window.history.replaceState({}, '', url);
+
+  // Update pills
+  document.querySelectorAll('.tenant-pill').forEach(pill => {
+    pill.classList.toggle('active', pill.dataset.tenant === tenantId);
+  });
+
+  loadEvents();
+}
+
+function populateTenantSelectors() {
+  const select = document.getElementById('event-tenant-select');
+  if (!select) return;
+
+  select.innerHTML = tenantsList.map(t => `
+    <option value="${t.id}">${t.icon || '🏢'} ${t.name}</option>
+  `).join('');
+
+  const cfgSelect = document.getElementById('cfg-tenant-selector');
+  if (cfgSelect) {
+    cfgSelect.innerHTML = tenantsList.map(t => `
+      <option value="${t.id}">${t.icon || '🏢'} ${t.name}</option>
+    `).join('');
   }
 }
 
@@ -109,7 +190,7 @@ function initEventListeners() {
 // Load Events from API
 async function loadEvents() {
   try {
-    const res = await window.api.getEvents(currentDate);
+    const res = await window.api.getEvents(currentDate, currentTenantId);
     eventsList = res.data || [];
     renderTimeline();
     updateProgress();
@@ -128,13 +209,13 @@ function renderTimeline() {
       <div class="empty-state">
         <span class="icon">🌴</span>
         <h3>Sin compromisos agendados</h3>
-        <p>Toca el botón <strong>+</strong> abajo para agregar tu primera actividad.</p>
+        <p>Toca el botón <strong>+</strong> abajo para agregar tu primera actividad para este perfil.</p>
       </div>
     `;
     return;
   }
 
-  eventsList.forEach((event, idx) => {
+  eventsList.forEach((event) => {
     // If transit node exists before event
     if (event.transitBefore && event.transitBefore.text) {
       const transitEl = document.createElement('div');
@@ -165,6 +246,7 @@ function renderTimeline() {
       <div class="info" onclick="handleCardClick('${event.id}', event)">
         <div class="time-row">
           <span class="time">${event.timeDisplay || event.time}</span>
+          ${event.tenantName ? `<span class="card-tenant-tag">${event.tenantIcon || '🏢'} ${event.tenantName}</span>` : ''}
           ${countdownBadgeHtml}
         </div>
         <div class="title">${event.title}</div>
@@ -247,6 +329,7 @@ function openEventModal(eventId = null) {
     titleEl.innerText = 'Editar Compromiso';
     btnDelete.style.display = 'block';
 
+    document.getElementById('event-tenant-select').value = event.tenantId || 'renace';
     document.getElementById('event-title').value = event.title || '';
     document.getElementById('event-date').value = event.date || currentDate;
     document.getElementById('event-time').value = event.time || '10:00';
@@ -272,6 +355,7 @@ function openEventModal(eventId = null) {
     titleEl.innerText = 'Nuevo Compromiso';
     btnDelete.style.display = 'none';
     document.getElementById('event-form').reset();
+    document.getElementById('event-tenant-select').value = currentTenantId !== 'all' ? currentTenantId : 'renace';
     document.getElementById('event-date').value = currentDate;
     document.getElementById('event-time').value = '10:00';
     document.getElementById('event-has-transit').checked = false;
@@ -303,6 +387,7 @@ function handleCardClick(id, e) {
 async function handleSaveEvent(e) {
   e.preventDefault();
 
+  const tenantId = document.getElementById('event-tenant-select').value;
   const title = document.getElementById('event-title').value.trim();
   const date = document.getElementById('event-date').value;
   const time = document.getElementById('event-time').value;
@@ -316,6 +401,7 @@ async function handleSaveEvent(e) {
   const transitText = document.getElementById('event-transit-text').value.trim();
 
   const eventPayload = {
+    tenantId,
     title,
     date,
     time,
@@ -370,6 +456,19 @@ async function loadConfig() {
     document.getElementById('cfg-phone').value = cfg.defaultNotifyPhone || '';
     document.getElementById('cfg-evo-instance').value = cfg.evoInstance || 'RENACE.TECH';
     document.getElementById('cfg-evo-url').value = cfg.evoApiUrl || 'https://evoapi.renace.tech';
+
+    // Check Insforge status
+    const statusRes = await window.api.getStatus();
+    const insforgeInfo = statusRes.data?.insforge;
+    if (insforgeInfo) {
+      const insforgeEl = document.getElementById('insforge-status-display');
+      if (insforgeEl) {
+        insforgeEl.innerHTML = `
+          <strong>Insforge DB Sync:</strong> ${insforgeInfo.status}<br>
+          <span style="color:#94a3b8; font-size:11px;">${insforgeInfo.engine}</span>
+        `;
+      }
+    }
   } catch (err) {
     console.warn('Error loading config:', err);
   }
@@ -413,7 +512,8 @@ async function handleTestEmail() {
 
   try {
     const recipient = document.getElementById('cfg-email').value.trim();
-    const res = await window.api.testEmail(recipient);
+    const tenant = currentTenantId !== 'all' ? currentTenantId : 'renace';
+    const res = await window.api.testEmail(recipient, tenant);
     showToast(res.message || 'Correo de prueba enviado con éxito', 'success');
     loadLogs();
   } catch (err) {
@@ -431,7 +531,8 @@ async function handleTestWhatsApp() {
 
   try {
     const phone = document.getElementById('cfg-phone').value.trim();
-    const res = await window.api.testWhatsApp(phone);
+    const tenant = currentTenantId !== 'all' ? currentTenantId : 'renace';
+    const res = await window.api.testWhatsApp(phone, tenant);
     showToast(res.message || 'WhatsApp de prueba enviado con éxito', 'success');
     loadLogs();
   } catch (err) {
@@ -448,7 +549,7 @@ async function loadLogs() {
   logsContainer.innerHTML = '<div style="font-size:12px; color:#94a3b8;">Cargando historial...</div>';
 
   try {
-    const res = await window.api.getLogs();
+    const res = await window.api.getLogs(currentTenantId);
     const logs = res.data || [];
 
     if (logs.length === 0) {
@@ -464,7 +565,7 @@ async function loadLogs() {
       return `
         <div class="log-item">
           <div class="log-header">
-            <span>${icon} ${log.channel}</span>
+            <span>${icon} ${log.channel} [${log.tenantId || 'global'}]</span>
             <span style="color: ${statusColor}; font-weight:700;">${log.status.toUpperCase()} · ${dateStr}</span>
           </div>
           <div class="log-detail">${log.detail || log.eventTitle || 'Prueba de conexión'} (${log.recipient})</div>

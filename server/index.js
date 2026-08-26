@@ -4,6 +4,7 @@ const path = require('path');
 const cors = require('cors');
 
 const eventsRouter = require('./routes/events');
+const tenantsRouter = require('./routes/tenants');
 const configRouter = require('./routes/config');
 const notificationsRouter = require('./routes/notifications');
 const schedulerService = require('./services/schedulerService');
@@ -18,7 +19,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Security & Cache headers for PWA
 app.use((req, res, next) => {
-  res.setHeader('X-Powered-By', 'RENACE Engine');
+  res.setHeader('X-Powered-By', 'RENACE Multi-Tenant Engine');
   if (req.url.startsWith('/css/') || req.url.startsWith('/js/') || req.url.startsWith('/icons/')) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
   }
@@ -30,6 +31,7 @@ app.use(express.static(path.join(__dirname, '../public')));
 
 // API Routes
 app.use('/api/events', eventsRouter);
+app.use('/api/tenants', tenantsRouter);
 app.use('/api/config', configRouter);
 app.use('/api/notifications', notificationsRouter);
 
@@ -37,7 +39,7 @@ app.use('/api/notifications', notificationsRouter);
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    app: 'Agenda RENACE',
+    app: 'Agenda RENACE Multi-Tenant',
     domain: 'agenda.renace.tech',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
@@ -52,7 +54,7 @@ app.get('*', (req, res) => {
 // Start Server & Notification Engine
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 AGENDA RENACE APP corriendo en puerto ${PORT}`);
+  console.log(`🚀 AGENDA RENACE MULTI-TENANT APP corriendo en puerto ${PORT}`);
   console.log(`🌐 URL Local: http://localhost:${PORT}`);
   console.log(`🌐 Dominio Producción: https://agenda.renace.tech`);
   console.log(`====================================================`);

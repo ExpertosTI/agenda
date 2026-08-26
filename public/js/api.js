@@ -1,12 +1,14 @@
-// API Client for Agenda RENACE
+// API Client for Agenda RENACE Multi-Tenant
 
 const API_BASE = '/api';
 
 async function request(endpoint, options = {}) {
   try {
+    const currentTenant = window.currentTenantId || 'all';
     const res = await fetch(`${API_BASE}${endpoint}`, {
       headers: {
         'Content-Type': 'application/json',
+        'X-Tenant-ID': currentTenant,
         ...(options.headers || {})
       },
       ...options
@@ -24,8 +26,20 @@ async function request(endpoint, options = {}) {
 }
 
 const api = {
+  // Tenants
+  getTenants: () => request('/tenants'),
+  getTenant: (id) => request(`/tenants/${id}`),
+  createTenant: (tenantData) => request('/tenants', { method: 'POST', body: JSON.stringify(tenantData) }),
+  updateTenant: (id, tenantData) => request(`/tenants/${id}`, { method: 'PUT', body: JSON.stringify(tenantData) }),
+  deleteTenant: (id) => request(`/tenants/${id}`, { method: 'DELETE' }),
+
   // Events
-  getEvents: (date) => request(date ? `/events?date=${encodeURIComponent(date)}` : '/events'),
+  getEvents: (date, tenantId) => {
+    let url = '/events?';
+    if (date) url += `date=${encodeURIComponent(date)}&`;
+    if (tenantId && tenantId !== 'all') url += `tenantId=${encodeURIComponent(tenantId)}&`;
+    return request(url.replace(/&$/, ''));
+  },
   getEvent: (id) => request(`/events/${id}`),
   createEvent: (eventData) => request('/events', { method: 'POST', body: JSON.stringify(eventData) }),
   updateEvent: (id, eventData) => request(`/events/${id}`, { method: 'PUT', body: JSON.stringify(eventData) }),
@@ -36,10 +50,10 @@ const api = {
   getConfig: () => request('/config'),
   updateConfig: (configData) => request('/config', { method: 'PUT', body: JSON.stringify(configData) }),
 
-  // Notifications & Tests
-  testEmail: (recipient) => request('/notifications/test-email', { method: 'POST', body: JSON.stringify({ recipient }) }),
-  testWhatsApp: (phone) => request('/notifications/test-whatsapp', { method: 'POST', body: JSON.stringify({ phone }) }),
-  getLogs: () => request('/notifications/logs'),
+  // Notifications, Tests & Insforge
+  testEmail: (recipient, tenantId) => request('/notifications/test-email', { method: 'POST', body: JSON.stringify({ recipient, tenantId }) }),
+  testWhatsApp: (phone, tenantId) => request('/notifications/test-whatsapp', { method: 'POST', body: JSON.stringify({ phone, tenantId }) }),
+  getLogs: (tenantId) => request(tenantId && tenantId !== 'all' ? `/notifications/logs?tenantId=${encodeURIComponent(tenantId)}` : '/notifications/logs'),
   getStatus: () => request('/notifications/status')
 };
 

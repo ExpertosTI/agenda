@@ -3,19 +3,20 @@ const db = require('../db');
 function normalizePhone(phone) {
   if (!phone) return '';
   let cleaned = String(phone).replace(/[^0-9]/g, '');
-  // Dominican Republic numbers (10 digits starting with 809, 829, 849 -> prepend 1)
   if (cleaned.length === 10 && (cleaned.startsWith('809') || cleaned.startsWith('829') || cleaned.startsWith('849'))) {
     cleaned = '1' + cleaned;
   }
   return cleaned;
 }
 
-function buildWhatsAppMessage(event, minutesBefore) {
+function buildWhatsAppMessage(event, tenant, minutesBefore) {
   const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
   const icon = event.icon || '📌';
+  const tenantName = tenant ? tenant.name : 'RENACE Tech';
   const urgency = minutesBefore === 5 ? '🚨 *¡ALERTA DE 5 MINUTOS!*' : '⏰ *RECORDATORIO: FALTAN 10 MINUTOS*';
 
-  let msg = `${urgency}\n\n`;
+  let msg = `⚡ *AGENDA RENACE* · *[${tenantName}]*\n`;
+  msg += `${urgency}\n\n`;
   msg += `*${icon} ${event.title}*\n`;
   msg += `🕒 *Hora:* ${event.timeDisplay || event.time} (Fecha: ${event.date})\n`;
   
@@ -35,15 +36,15 @@ function buildWhatsAppMessage(event, minutesBefore) {
     msg += `📝 *Notas:* ${event.notes}\n`;
   }
 
-  msg += `\n🌐 *Abrir Agenda:* ${appUrl}`;
+  msg += `\n🌐 *Abrir Agenda:* ${appUrl}?tenant=${tenant ? tenant.id : 'renace'}`;
   return msg;
 }
 
-async function sendWhatsAppMessage({ number, text }) {
+async function sendWhatsAppMessage({ number, text, instance = null }) {
   const config = db.getConfig();
   const evoApiUrl = (config.evoApiUrl || 'https://evoapi.renace.tech').replace(/\/$/, '');
   const evoApiKey = config.evoApiKey || 'B6D711FCDE4D4FD5936544120E713976';
-  const evoInstance = config.evoInstance || 'RENACE.TECH';
+  const evoInstance = instance || config.evoInstance || 'RENACE.TECH';
 
   const cleanNumber = normalizePhone(number);
   if (!cleanNumber) {
@@ -78,23 +79,26 @@ async function sendWhatsAppMessage({ number, text }) {
 }
 
 async function sendEventReminder(event, minutesBefore, customPhone = null) {
+  const tenant = db.getTenantById(event.tenantId);
   const config = db.getConfig();
-  const recipientPhone = customPhone || config.defaultNotifyPhone || '18093487921';
-  const text = buildWhatsAppMessage(event, minutesBefore);
+  const recipientPhone = customPhone || (tenant && tenant.notifyPhone) || config.defaultNotifyPhone || '18093487921';
+  const instance = (tenant && tenant.evoInstance) || config.evoInstance || 'RENACE.TECH';
+  const text = buildWhatsAppMessage(event, tenant, minutesBefore);
 
   try {
-    const result = await sendWhatsAppMessage({ number: recipientPhone, text });
-    console.log(`[WhatsAppService] Reminder sent for "${event.title}" (${minutesBefore}m) to ${recipientPhone}`);
+    const result = await sendWhatsAppMessage({ number: recipientPhone, text, instance });
+    console.log(`[WhatsAppService] Reminder sent for "${event.title}" [Tenant: ${tenant ? tenant.id : 'default'}] (${minutesBefore}m) to ${recipientPhone}`);
 
     db.addLog({
       type: 'whatsapp',
       channel: 'Evolution API',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: recipientPhone,
       eventId: event.id,
       eventTitle: event.title,
       minutesBefore: minutesBefore,
       status: 'success',
-      detail: `Mensaje de WhatsApp a los ${minutesBefore}m enviado exitosamente`
+      detail: `WhatsApp a los ${minutesBefore}m enviado para ${tenant ? tenant.name : 'RENACE'}`
     });
 
     return { success: true, data: result };
@@ -104,6 +108,7 @@ async function sendEventReminder(event, minutesBefore, customPhone = null) {
     db.addLog({
       type: 'whatsapp',
       channel: 'Evolution API',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: recipientPhone,
       eventId: event.id,
       eventTitle: event.title,
@@ -117,24 +122,26 @@ async function sendEventReminder(event, minutesBefore, customPhone = null) {
   }
 }
 
-async function sendTestWhatsApp(customPhone = null) {
+async function sendTestWhatsApp(customPhone = null, tenantId = null) {
+  const tenant = db.getTenantById(tenantId);
   const config = db.getConfig();
-  const recipientPhone = customPhone || config.defaultNotifyPhone || '18093487921';
-  const evoInstance = config.evoInstance || 'RENACE.TECH';
+  const recipientPhone = customPhone || (tenant && tenant.notifyPhone) || config.defaultNotifyPhone || '18093487921';
+  const evoInstance = (tenant && tenant.evoInstance) || config.evoInstance || 'RENACE.TECH';
   const appUrl = process.env.APP_URL || 'https://agenda.renace.tech';
 
-  const testText = `✅ *PRUEBA AGENDA RENACE · EVOLUTION API*\n\nConexión establecida con éxito.\n• Instancia: *${evoInstance}*\n• Fecha: ${new Date().toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo' })}\n• Alertas activas: *10 minutos* y *5 minutos* antes de cada compromiso.\n\n🌐 ${appUrl}`;
+  const testText = `✅ *PRUEBA AGENDA RENACE MULTI-TENANT*\n\n• Perfil / Tenant: *${tenant ? tenant.name : 'RENACE Tech'}*\n• Instancia Evolution API: *${evoInstance}*\n• Fecha: ${new Date().toLocaleString('es-DO', { timeZone: 'America/Santo_Domingo' })}\n• Alertas activas: *10m y 5m* antes de cada compromiso.\n\n🌐 ${appUrl}`;
 
   try {
-    const result = await sendWhatsAppMessage({ number: recipientPhone, text: testText });
+    const result = await sendWhatsAppMessage({ number: recipientPhone, text: testText, instance: evoInstance });
     console.log(`[WhatsAppService] Test WhatsApp sent to ${recipientPhone}`);
 
     db.addLog({
       type: 'whatsapp_test',
       channel: 'Evolution API',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: recipientPhone,
       status: 'success',
-      detail: `Prueba de WhatsApp enviada correctamente`
+      detail: `Prueba de WhatsApp enviada para ${tenant ? tenant.name : 'RENACE'}`
     });
 
     return { success: true, data: result, recipient: recipientPhone };
@@ -144,6 +151,7 @@ async function sendTestWhatsApp(customPhone = null) {
     db.addLog({
       type: 'whatsapp_test',
       channel: 'Evolution API',
+      tenantId: tenant ? tenant.id : 'renace',
       recipient: recipientPhone,
       status: 'error',
       error: error.message,
