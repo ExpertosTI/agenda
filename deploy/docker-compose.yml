@@ -5,8 +5,6 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: agenda-renace-app
     restart: unless-stopped
-    ports:
-      - "3000:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -28,16 +26,26 @@ services:
     volumes:
       - ../data:/app/data
     networks:
-      - traefik-net
+      - RenaceNet
     labels:
       - "traefik.enable=true"
-      # Traefik Router compatible with Cloudflare Proxy (web & websecure)
-      - "traefik.http.routers.agenda-renace.rule=Host(`agenda.renace.tech`)"
-      - "traefik.http.routers.agenda-renace.entrypoints=web,websecure"
-      - "traefik.http.services.agenda-renace.loadbalancer.server.port=3000"
-      - "traefik.http.middlewares.agenda-compress.compress=true"
-      - "traefik.http.routers.agenda-renace.middlewares=agenda-compress"
+      - "traefik.docker.network=RenaceNet"
+      
+      # 1. HTTP Router
+      - "traefik.http.routers.agenda-web.entrypoints=web"
+      - "traefik.http.routers.agenda-web.rule=Host(`agenda.renace.tech`)"
+      - "traefik.http.routers.agenda-web.service=agenda-svc"
+      
+      # 2. HTTPS Router
+      - "traefik.http.routers.agenda-secure.entrypoints=websecure"
+      - "traefik.http.routers.agenda-secure.rule=Host(`agenda.renace.tech`)"
+      - "traefik.http.routers.agenda-secure.tls=true"
+      - "traefik.http.routers.agenda-secure.tls.certresolver=letsencryptresolver"
+      - "traefik.http.routers.agenda-secure.service=agenda-svc"
+      
+      # 3. Load Balancer Service Port
+      - "traefik.http.services.agenda-svc.loadbalancer.server.port=3000"
 
 networks:
-  traefik-net:
+  RenaceNet:
     external: true
