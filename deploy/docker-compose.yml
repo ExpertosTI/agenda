@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   agenda-app:
     build:
@@ -7,6 +5,8 @@ services:
       dockerfile: deploy/Dockerfile
     container_name: agenda-renace-app
     restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -31,23 +31,12 @@ services:
       - traefik-net
     labels:
       - "traefik.enable=true"
-      # HTTP Router (redirect to HTTPS)
-      - "traefik.http.routers.agenda-http.rule=Host(`agenda.renace.tech`)"
-      - "traefik.http.routers.agenda-http.entrypoints=web"
-      - "traefik.http.routers.agenda-http.middlewares=agenda-redirect-ssl"
-      - "traefik.http.middlewares.agenda-redirect-ssl.redirectscheme.scheme=https"
-      # HTTPS Router
-      - "traefik.http.routers.agenda-https.rule=Host(`agenda.renace.tech`)"
-      - "traefik.http.routers.agenda-https.entrypoints=websecure"
-      - "traefik.http.routers.agenda-https.tls=true"
-      - "traefik.http.routers.agenda-https.tls.certresolver=letsencrypt"
-      # Middlewares (Compression & Security)
-      - "traefik.http.routers.agenda-https.middlewares=agenda-compress,agenda-security"
+      # Traefik Router compatible with Cloudflare Proxy (web & websecure)
+      - "traefik.http.routers.agenda-renace.rule=Host(`agenda.renace.tech`)"
+      - "traefik.http.routers.agenda-renace.entrypoints=web,websecure"
+      - "traefik.http.services.agenda-renace.loadbalancer.server.port=3000"
       - "traefik.http.middlewares.agenda-compress.compress=true"
-      - "traefik.http.middlewares.agenda-security.headers.browserXSSFilter=true"
-      - "traefik.http.middlewares.agenda-security.headers.contentTypeNosniff=true"
-      # Internal Service Port
-      - "traefik.http.services.agenda-service.loadbalancer.server.port=3000"
+      - "traefik.http.routers.agenda-renace.middlewares=agenda-compress"
 
 networks:
   traefik-net:
