@@ -3,11 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Mi Agenda RENACE · Multi-Tenant & Alertas Inteligentes</title>
+  <title>Mi Agenda RENACE · Ultra-Moderna Multi-Tenant</title>
   
   <!-- PWA & Mobile Meta Tags -->
   <link rel="manifest" href="/manifest.json">
-  <meta name="theme-color" content="#090d16">
+  <meta name="theme-color" content="#060911">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Agenda">
@@ -33,28 +33,40 @@
     <!-- Top Header -->
     <header>
       <div class="header-meta">
-        <span class="date-badge" id="current-date-badge">Hoy</span>
-        <h1>Tu Agenda</h1>
+        <span class="live-clock-pill" id="live-clock-text">00:00:00 · SANTO DOMINGO</span>
+        <span class="date-badge" id="current-date-badge" style="font-size:0.8rem; font-weight:800; color:#fff; background:none; border:none; padding:0;">HOY</span>
       </div>
       <div class="header-actions">
-        <button class="icon-btn" id="btn-settings-open" title="Configurar Alertas & Insforge">⚙️</button>
+        <button class="icon-btn" id="btn-stats-open" title="Estadísticas de Productividad">📊</button>
+        <button class="icon-btn" id="btn-export-ical" title="Sincronizar con Apple / Google Calendar (.ics)">📅</button>
+        <button class="icon-btn" id="btn-settings-open" title="Configuración & Insforge">⚙️</button>
       </div>
     </header>
 
-    <!-- Date Switcher Bar -->
-    <div class="date-selector-bar">
-      <button class="date-pill" id="pill-today">Hoy</button>
-      <button class="date-pill" id="pill-tomorrow">Mañana</button>
-      <div class="date-picker-trigger" title="Elegir Fecha">
-        📅
-        <input type="date" id="custom-date-picker">
+    <!-- Weekly Strip Calendar Slider -->
+    <div class="weekly-slider-container" id="weekly-slider">
+      <!-- Injected dynamically via app.js -->
+    </div>
+
+    <!-- Search & Filter Bar -->
+    <div class="search-filter-box">
+      <div class="search-input-wrapper">
+        <span class="search-icon">🔍</span>
+        <input type="text" id="search-input" placeholder="Buscar compromisos, notas o lugares...">
+        <button class="clear-search-btn" id="btn-clear-search">✕</button>
+      </div>
+      <div class="filter-chips-row">
+        <button class="filter-chip active" data-filter="all">🌐 Todos</button>
+        <button class="filter-chip" data-filter="urgent">🔥 Urgentes / 10m</button>
+        <button class="filter-chip" data-filter="pending">⏳ Pendientes</button>
+        <button class="filter-chip" data-filter="completed">✅ Listos</button>
       </div>
     </div>
 
     <!-- Daily Progress Tracker Card -->
     <div class="progress-card">
       <div class="progress-header">
-        <span><span>⚡</span> Progreso del perfil</span>
+        <span><span>⚡</span> Progreso Diario</span>
         <span id="progress-text">0/0 completados</span>
       </div>
       <div class="progress-bar">
@@ -105,8 +117,16 @@
             <input type="date" class="form-input" id="event-date" required>
           </div>
           <div class="form-group" style="flex:1;">
-            <label class="form-label">Hora de inicio *</label>
+            <label class="form-label">Hora *</label>
             <input type="time" class="form-input" id="event-time" required>
+          </div>
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Prioridad</label>
+            <select class="form-select" id="event-priority">
+              <option value="normal">🟢 Normal</option>
+              <option value="medium">🟡 Media</option>
+              <option value="high">🔴 Alta</option>
+            </select>
           </div>
         </div>
 
@@ -132,8 +152,18 @@
         </div>
 
         <div class="form-group">
-          <label class="form-label">Ubicación / Destino</label>
-          <input type="text" class="form-input" id="event-location" placeholder="Ej: Altamar Restaurant">
+          <label class="form-label">Ubicación / Destino (Ruta Google Maps)</label>
+          <input type="text" class="form-input" id="event-location" placeholder="Ej: Altamar Restaurant, Santo Domingo">
+        </div>
+
+        <!-- Subtasks Builder Section -->
+        <div class="form-group" style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 14px; border: 1px solid var(--border);">
+          <label class="form-label" style="margin-bottom:8px;">Subtareas / Checklist</label>
+          <div id="form-subtasks-list"></div>
+          <div style="display:flex; gap:8px; margin-top:8px;">
+            <input type="text" id="form-new-subtask-input" class="form-input" placeholder="Nueva subtarea..." style="padding:8px 12px; font-size:13px;">
+            <button type="button" class="btn-secondary" id="btn-add-form-subtask" style="width:auto; margin:0; padding:8px 14px;">+ Añadir</button>
+          </div>
         </div>
 
         <!-- Transit Node Toggle -->
@@ -169,11 +199,75 @@
     </div>
   </div>
 
-  <!-- Modal: Configuración de Alertas, Multi-Tenant & Insforge -->
+  <!-- Modal: Crear Nuevo Perfil / Tenant -->
+  <div class="modal-overlay" id="tenant-modal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>Crear Nuevo Perfil de Agenda</h2>
+        <button class="close-btn" id="btn-close-tenant-modal">✕</button>
+      </div>
+      <form id="tenant-form">
+        <div class="form-group">
+          <label class="form-label">Nombre del Negocio / Perfil *</label>
+          <input type="text" class="form-input" id="new-tenant-name" placeholder="Ej: Inmobiliaria RENACE" required>
+        </div>
+        <div class="form-row">
+          <div class="form-group" style="flex:1;">
+            <label class="form-label">Ícono</label>
+            <input type="text" class="form-input" id="new-tenant-icon" placeholder="🏢" value="🏢">
+          </div>
+          <div class="form-group" style="flex:2;">
+            <label class="form-label">Etiqueta / Badge</label>
+            <input type="text" class="form-input" id="new-tenant-badge" placeholder="Comercial" value="Comercial">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Correo para Alertas</label>
+          <input type="email" class="form-input" id="new-tenant-email" placeholder="info@renace.tech" value="info@renace.tech">
+        </div>
+        <div class="form-group">
+          <label class="form-label">WhatsApp para Alertas</label>
+          <input type="tel" class="form-input" id="new-tenant-phone" placeholder="18093487921" value="18093487921">
+        </div>
+        <button type="submit" class="btn-primary">Guardar Nuevo Perfil</button>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Estadísticas & Productividad -->
+  <div class="modal-overlay" id="stats-modal">
+    <div class="modal-sheet">
+      <div class="modal-header">
+        <h2>📊 Rendimiento & Productividad</h2>
+        <button class="close-btn" id="btn-close-stats-modal">✕</button>
+      </div>
+      <div class="stats-grid">
+        <div class="stat-box">
+          <div class="stat-number" id="stat-total">0</div>
+          <div class="stat-label">Compromisos</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="stat-completed" style="color:var(--success);">0</div>
+          <div class="stat-label">Completados</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="stat-rate" style="color:var(--accent-light);">0%</div>
+          <div class="stat-label">Tasa de Éxito</div>
+        </div>
+        <div class="stat-box">
+          <div class="stat-number" id="stat-urgent" style="color:var(--danger);">0</div>
+          <div class="stat-label">Alta Prioridad</div>
+        </div>
+      </div>
+      <button type="button" class="btn-secondary" onclick="closeStatsModal()">Cerrar</button>
+    </div>
+  </div>
+
+  <!-- Modal: Configuración de Alertas & Insforge -->
   <div class="modal-overlay" id="settings-modal">
     <div class="modal-sheet">
       <div class="modal-header">
-        <h2>Ajustes & Multi-Tenant</h2>
+        <h2>Ajustes & Conectividad</h2>
         <button class="close-btn" id="btn-close-settings-modal">✕</button>
       </div>
 

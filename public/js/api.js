@@ -1,4 +1,4 @@
-// API Client for Agenda RENACE Multi-Tenant
+// API Client for Agenda RENACE Ultra-Moderna
 
 const API_BASE = '/api';
 
@@ -34,17 +34,23 @@ const api = {
   deleteTenant: (id) => request(`/tenants/${id}`, { method: 'DELETE' }),
 
   // Events
-  getEvents: (date, tenantId) => {
+  getEvents: (date, tenantId, q = '') => {
     let url = '/events?';
     if (date) url += `date=${encodeURIComponent(date)}&`;
     if (tenantId && tenantId !== 'all') url += `tenantId=${encodeURIComponent(tenantId)}&`;
+    if (q) url += `q=${encodeURIComponent(q)}&`;
     return request(url.replace(/&$/, ''));
   },
   getEvent: (id) => request(`/events/${id}`),
   createEvent: (eventData) => request('/events', { method: 'POST', body: JSON.stringify(eventData) }),
   updateEvent: (id, eventData) => request(`/events/${id}`, { method: 'PUT', body: JSON.stringify(eventData) }),
   toggleEvent: (id) => request(`/events/${id}/toggle`, { method: 'PATCH' }),
+  postponeEvent: (id, minutes = 15) => request(`/events/${id}/postpone`, { method: 'POST', body: JSON.stringify({ minutes }) }),
+  toggleSubtask: (eventId, subtaskId) => request(`/events/${eventId}/subtasks/${subtaskId}/toggle`, { method: 'PATCH' }),
   deleteEvent: (id) => request(`/events/${id}`, { method: 'DELETE' }),
+
+  // Analytics & Stats
+  getAnalytics: (tenantId) => request(tenantId && tenantId !== 'all' ? `/analytics?tenantId=${encodeURIComponent(tenantId)}` : '/analytics'),
 
   // Configuration
   getConfig: () => request('/config'),

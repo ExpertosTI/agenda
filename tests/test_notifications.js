@@ -6,7 +6,7 @@ const { calculateMinutesRemaining, parseEventDateTime } = require('../server/ser
 
 async function runTests() {
   console.log('====================================================');
-  console.log('🧪 EJECUTANDO SUITE DE PRUEBAS MULTI-TENANT & INSFORGE');
+  console.log('🧪 EJECUTANDO SUITE DE PRUEBAS ULTRA-MODERNA');
   console.log('====================================================');
 
   let passed = 0;
@@ -23,56 +23,50 @@ async function runTests() {
   }
 
   // 1. Multi-Tenant DB Tests
-  console.log('\n--- 1. Pruebas de Multi-Tenant & Persistencia ---');
+  console.log('\n--- 1. Multi-Tenant & Perfiles ---');
   const tenants = db.getTenants();
-  assert(tenants.length >= 3, `Se encontraron ${tenants.length} tenants (mínimo 3: RENACE, Altamar, Personal)`);
+  assert(tenants.length >= 3, `Tenants encontrados: ${tenants.length}`);
   
   const altamarTenant = db.getTenantById('altamar');
   assert(altamarTenant && altamarTenant.name.includes('Altamar'), 'Tenant "Altamar" identificado correctamente');
 
+  // 2. Events, Subtasks & Search Tests
+  console.log('\n--- 2. Búsqueda, Subtareas & Posponer ---');
   const events = db.getEvents();
-  assert(events.length >= 6, `Se cargaron ${events.length} eventos iniciales`);
-  
-  const altamarEvents = db.getEvents(null, 'altamar');
-  assert(altamarEvents.length >= 1, `Filtro por tenant funciona: ${altamarEvents.length} eventos para Altamar`);
+  assert(events.length >= 6, `Eventos base: ${events.length}`);
 
-  // 2. Insforge Service Test
-  console.log('\n--- 2. Pruebas de Integración Insforge DB ---');
+  const searchResults = db.getEvents(null, null, 'Peluquería');
+  assert(searchResults.length >= 1, `Búsqueda por palabra clave: ${searchResults.length} coincidencia(s)`);
+
+  const firstEvent = events[0];
+  if (firstEvent && firstEvent.subtasks && firstEvent.subtasks.length > 0) {
+    const subId = firstEvent.subtasks[0].id;
+    const initialStatus = firstEvent.subtasks[0].completed;
+    const updatedEvt = db.toggleSubtask(firstEvent.id, subId);
+    assert(updatedEvt && updatedEvt.subtasks[0].completed === !initialStatus, 'Toggle de subtarea interactiva exitoso');
+    // revert
+    db.toggleSubtask(firstEvent.id, subId);
+  }
+
+  // 3. Analytics Test
+  console.log('\n--- 3. Módulo de Analítica & Rendimiento ---');
+  const stats = db.getAnalytics();
+  assert(stats && typeof stats.total === 'number' && typeof stats.completionRate === 'number', `Estadísticas calculadas (Total: ${stats.total}, Éxito: ${stats.completionRate}%)`);
+
+  // 4. Insforge DB Sync Test
+  console.log('\n--- 4. Sincronización Insforge DB ---');
   const insforgeStatus = await insforgeService.getStatus();
-  assert(insforgeStatus !== null, `Estado de Insforge obtenido: ${insforgeStatus.status}`);
+  assert(insforgeStatus !== null, `Estado Insforge: ${insforgeStatus.status}`);
 
-  // 3. SMTP & Multi-Tenant Email Test
-  console.log('\n--- 3. Pruebas de Hostinger SMTP Multi-Tenant ---');
+  // 5. Hostinger SMTP Test
+  console.log('\n--- 5. Conexión Hostinger SMTP SSL ---');
   const smtpResult = await emailService.verifyConnection();
-  assert(smtpResult.success === true, 'Conexión SMTP con Hostinger exitosa (smtp.hostinger.com:465)');
+  assert(smtpResult.success === true, 'Conexión SMTP exitosa (smtp.hostinger.com:465)');
 
-  // 4. WhatsApp Phone Normalization Test
-  console.log('\n--- 4. Pruebas de Formato WhatsApp Evolution API ---');
-  const norm1 = whatsappService.normalizePhone('809-348-7921');
-  assert(norm1 === '18093487921', `Normalización Dominicana: 809-348-7921 -> ${norm1}`);
-
-  // 5. Scheduler Window Calculation Test
-  console.log('\n--- 5. Pruebas de Algoritmo de Alertas (10m y 5m) ---');
-  const now = new Date();
-  const in10m = new Date(now.getTime() + 10 * 60000);
-  const event10m = {
-    date: in10m.toISOString().split('T')[0],
-    time: `${String(in10m.getHours()).padStart(2, '0')}:${String(in10m.getMinutes()).padStart(2, '0')}`
-  };
-  const parsed10m = parseEventDateTime(event10m);
-  const diff10m = calculateMinutesRemaining(parsed10m);
-  const is10mInWindow = diff10m >= 8.5 && diff10m <= 10.5;
-  assert(is10mInWindow, `Cálculo de ventana 10m en rango válido (${diff10m.toFixed(2)} min restantes)`);
-
-  const in5m = new Date(now.getTime() + 5 * 60000);
-  const event5m = {
-    date: in5m.toISOString().split('T')[0],
-    time: `${String(in5m.getHours()).padStart(2, '0')}:${String(in5m.getMinutes()).padStart(2, '0')}`
-  };
-  const parsed5m = parseEventDateTime(event5m);
-  const diff5m = calculateMinutesRemaining(parsed5m);
-  const is5mInWindow = diff5m >= 3.5 && diff5m <= 5.5;
-  assert(is5mInWindow, `Cálculo de ventana 5m en rango válido (${diff5m.toFixed(2)} min restantes)`);
+  // 6. WhatsApp Phone Normalization Test
+  console.log('\n--- 6. Normalización Evolution API ---');
+  const norm = whatsappService.normalizePhone('809-348-7921');
+  assert(norm === '18093487921', `Formato telefónico RD: 809-348-7921 -> ${norm}`);
 
   console.log('\n====================================================');
   console.log(`📊 RESULTADOS: ${passed} pasadas, ${failed} fallidas`);

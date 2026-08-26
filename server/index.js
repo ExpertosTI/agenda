@@ -7,6 +7,7 @@ const eventsRouter = require('./routes/events');
 const tenantsRouter = require('./routes/tenants');
 const configRouter = require('./routes/config');
 const notificationsRouter = require('./routes/notifications');
+const analyticsRouter = require('./routes/analytics');
 const schedulerService = require('./services/schedulerService');
 
 const app = express();
@@ -19,7 +20,7 @@ app.use(express.urlencoded({ extended: true }));
 
 // Security & Cache headers for PWA
 app.use((req, res, next) => {
-  res.setHeader('X-Powered-By', 'RENACE Multi-Tenant Engine');
+  res.setHeader('X-Powered-By', 'RENACE Ultra-Modern Engine');
   if (req.url.startsWith('/css/') || req.url.startsWith('/js/') || req.url.startsWith('/icons/')) {
     res.setHeader('Cache-Control', 'public, max-age=86400');
   }
@@ -34,12 +35,13 @@ app.use('/api/events', eventsRouter);
 app.use('/api/tenants', tenantsRouter);
 app.use('/api/config', configRouter);
 app.use('/api/notifications', notificationsRouter);
+app.use('/api/analytics', analyticsRouter);
 
 // Health check endpoint for Docker / Traefik
 app.get('/health', (req, res) => {
   res.json({
     status: 'healthy',
-    app: 'Agenda RENACE Multi-Tenant',
+    app: 'Agenda RENACE Ultra-Moderna',
     domain: 'agenda.renace.tech',
     uptime: process.uptime(),
     timestamp: new Date().toISOString()
@@ -54,7 +56,7 @@ app.get('*', (req, res) => {
 // Start Server & Notification Engine
 app.listen(PORT, () => {
   console.log(`====================================================`);
-  console.log(`🚀 AGENDA RENACE MULTI-TENANT APP corriendo en puerto ${PORT}`);
+  console.log(`🚀 AGENDA RENACE ULTRA-MODERNA corriendo en puerto ${PORT}`);
   console.log(`🌐 URL Local: http://localhost:${PORT}`);
   console.log(`🌐 Dominio Producción: https://agenda.renace.tech`);
   console.log(`====================================================`);

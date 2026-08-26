@@ -1,21 +1,75 @@
-// Agenda RENACE - Multi-Tenant Frontend Application Logic
+// Agenda RENACE - Ultra-Modern Fluid PWA Frontend Engine
 
-let currentTenantId = 'all'; // 'all', 'renace', 'altamar', 'personal', etc.
+let currentTenantId = 'all';
 let tenantsList = [];
 let currentDate = new Date().toISOString().split('T')[0];
 let eventsList = [];
 let editingEventId = null;
 let selectedIcon = '📌';
+let currentFilter = 'all'; // 'all', 'urgent', 'pending', 'completed'
+let searchQuery = '';
 let liveTickerInterval = null;
+let clockInterval = null;
 
-// Initialize app
+// Sound Effects via Web Audio API (Zero external assets)
+const soundEffects = {
+  ctx: null,
+  init() {
+    if (!this.ctx && (window.AudioContext || window.webkitAudioContext)) {
+      this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+    }
+  },
+  playSuccess() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'sine';
+      osc.frequency.setValueAtTime(587.33, this.ctx.currentTime); // D5
+      osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.15); // A5
+      gain.gain.setValueAtTime(0.12, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.35);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.35);
+    } catch (e) {}
+  },
+  playPop() {
+    try {
+      this.init();
+      if (!this.ctx) return;
+      const osc = this.ctx.createOscillator();
+      const gain = this.ctx.createGain();
+      osc.type = 'triangle';
+      osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+      gain.gain.setValueAtTime(0.08, this.ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + 0.1);
+      osc.connect(gain);
+      gain.connect(this.ctx.destination);
+      osc.start();
+      osc.stop(this.ctx.currentTime + 0.1);
+    } catch (e) {}
+  }
+};
+
+// Haptic Vibration Helper
+function triggerHaptic(pattern = [25]) {
+  if (navigator.vibrate) {
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+}
+
+// Initialize Application
 document.addEventListener('DOMContentLoaded', async () => {
   initServiceWorker();
-  initDateSelectors();
+  initLiveClock();
+  initWeeklySlider();
   initIconSelectors();
   initEventListeners();
   
-  // Read tenant from URL if present
+  // Read tenant from URL query param
   const urlParams = new URLSearchParams(window.location.search);
   const tenantParam = urlParams.get('tenant');
   if (tenantParam) {
@@ -30,15 +84,87 @@ document.addEventListener('DOMContentLoaded', async () => {
   liveTickerInterval = setInterval(updateLiveCountdowns, 5000);
 });
 
-// Register PWA Service Worker
+// PWA Service Worker Registration
 function initServiceWorker() {
   if ('serviceWorker' in navigator) {
     window.addEventListener('load', () => {
       navigator.serviceWorker.register('/sw.js')
-        .then((reg) => console.log('[PWA] Service Worker registrado:', reg.scope))
-        .catch((err) => console.warn('[PWA] Error registrando Service Worker:', err));
+        .then((reg) => console.log('[PWA] Service Worker activo:', reg.scope))
+        .catch((err) => console.warn('[PWA] Service Worker no registrado:', err));
     });
   }
+}
+
+// Live Header Clock
+function initLiveClock() {
+  const updateClock = () => {
+    const now = new Date();
+    const timeStr = now.toLocaleTimeString('es-DO', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+    const clockEl = document.getElementById('live-clock-text');
+    if (clockEl) {
+      clockEl.innerText = `${timeStr} · SANTO DOMINGO`;
+    }
+  };
+  updateClock();
+  clockInterval = setInterval(updateClock, 1000);
+}
+
+// ---------------- WEEKLY SLIDER ----------------
+function initWeeklySlider() {
+  const container = document.getElementById('weekly-slider');
+  if (!container) return;
+
+  container.innerHTML = '';
+  const today = new Date();
+  
+  // Render 10 days: 2 days back, today, and 7 days forward
+  for (let i = -2; i <= 7; i++) {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const dateStr = d.toISOString().split('T')[0];
+    
+    const dayName = d.toLocaleDateString('es-DO', { weekday: 'short' }).slice(0, 3);
+    const dayNumber = d.getDate();
+    const isActive = dateStr === currentDate ? 'active' : '';
+
+    const chip = document.createElement('div');
+    chip.className = `day-chip ${isActive}`;
+    chip.dataset.date = dateStr;
+    chip.innerHTML = `
+      <span class="day-name">${dayName}</span>
+      <span class="day-number">${dayNumber}</span>
+      <span class="dot-indicator"></span>
+    `;
+
+    chip.addEventListener('click', () => {
+      soundEffects.playPop();
+      triggerHaptic(20);
+      setDate(dateStr);
+    });
+
+    container.appendChild(chip);
+  }
+}
+
+function setDate(dateStr) {
+  currentDate = dateStr;
+  
+  // Update custom date picker
+  const picker = document.getElementById('custom-date-picker');
+  if (picker) picker.value = dateStr;
+
+  // Update header text
+  const d = new Date(dateStr + 'T12:00:00');
+  const options = { weekday: 'long', day: 'numeric', month: 'short' };
+  const formatted = d.toLocaleDateString('es-DO', options);
+  document.getElementById('current-date-badge').innerText = formatted.toUpperCase();
+
+  // Update Weekly slider chips
+  document.querySelectorAll('.day-chip').forEach(chip => {
+    chip.classList.toggle('active', chip.dataset.date === dateStr);
+  });
+
+  loadEvents();
 }
 
 // ---------------- TENANTS ----------------
@@ -72,13 +198,22 @@ function renderTenantBar() {
     btn.innerHTML = `<span>${t.icon || '🏢'} ${t.name}</span>`;
     container.appendChild(btn);
   });
+
+  // Add Tenant Button
+  const addBtn = document.createElement('button');
+  addBtn.className = 'btn-add-tenant';
+  addBtn.innerHTML = '+ Nuevo Perfil';
+  addBtn.onclick = () => openTenantModal();
+  container.appendChild(addBtn);
 }
 
 function selectTenant(tenantId) {
+  soundEffects.playPop();
+  triggerHaptic(20);
   currentTenantId = tenantId;
   window.currentTenantId = tenantId;
 
-  // Update URL without reload
+  // Update URL query without page reload
   const url = new URL(window.location);
   if (tenantId === 'all') {
     url.searchParams.delete('tenant');
@@ -87,7 +222,7 @@ function selectTenant(tenantId) {
   }
   window.history.replaceState({}, '', url);
 
-  // Update pills
+  // Update pill styles
   document.querySelectorAll('.tenant-pill').forEach(pill => {
     pill.classList.toggle('active', pill.dataset.tenant === tenantId);
   });
@@ -97,100 +232,17 @@ function selectTenant(tenantId) {
 
 function populateTenantSelectors() {
   const select = document.getElementById('event-tenant-select');
-  if (!select) return;
-
-  select.innerHTML = tenantsList.map(t => `
-    <option value="${t.id}">${t.icon || '🏢'} ${t.name}</option>
-  `).join('');
-
-  const cfgSelect = document.getElementById('cfg-tenant-selector');
-  if (cfgSelect) {
-    cfgSelect.innerHTML = tenantsList.map(t => `
+  if (select) {
+    select.innerHTML = tenantsList.map(t => `
       <option value="${t.id}">${t.icon || '🏢'} ${t.name}</option>
     `).join('');
   }
 }
 
-// Date Selector Initialization
-function initDateSelectors() {
-  const today = new Date();
-  const tomorrow = new Date();
-  tomorrow.setDate(today.getDate() + 1);
-
-  const todayStr = today.toISOString().split('T')[0];
-  const tomorrowStr = tomorrow.toISOString().split('T')[0];
-
-  document.getElementById('pill-today').dataset.date = todayStr;
-  document.getElementById('pill-tomorrow').dataset.date = tomorrowStr;
-  document.getElementById('custom-date-picker').value = todayStr;
-
-  setDate(todayStr);
-}
-
-function setDate(dateStr) {
-  currentDate = dateStr;
-  
-  // Update header text
-  const d = new Date(dateStr + 'T12:00:00');
-  const options = { weekday: 'short', day: 'numeric', month: 'short' };
-  const formatted = d.toLocaleDateString('es-DO', options);
-  document.getElementById('current-date-badge').innerText = formatted.toUpperCase();
-
-  // Update pills
-  document.querySelectorAll('.date-pill').forEach(pill => {
-    pill.classList.toggle('active', pill.dataset.date === dateStr);
-  });
-
-  loadEvents();
-}
-
-// Icon Selector
-function initIconSelectors() {
-  const choices = document.querySelectorAll('.icon-choice');
-  choices.forEach(choice => {
-    choice.addEventListener('click', () => {
-      choices.forEach(c => c.classList.remove('selected'));
-      choice.classList.add('selected');
-      selectedIcon = choice.dataset.icon;
-    });
-  });
-}
-
-// Event Listeners
-function initEventListeners() {
-  // Date pills
-  document.getElementById('pill-today').addEventListener('click', (e) => setDate(e.target.dataset.date));
-  document.getElementById('pill-tomorrow').addEventListener('click', (e) => setDate(e.target.dataset.date));
-  document.getElementById('custom-date-picker').addEventListener('change', (e) => {
-    if (e.target.value) setDate(e.target.value);
-  });
-
-  // Modal Triggers
-  document.getElementById('fab-add-btn').addEventListener('click', () => openEventModal());
-  document.getElementById('btn-close-event-modal').addEventListener('click', () => closeEventModal());
-  document.getElementById('btn-settings-open').addEventListener('click', () => openSettingsModal());
-  document.getElementById('btn-close-settings-modal').addEventListener('click', () => closeSettingsModal());
-
-  // Forms
-  document.getElementById('event-form').addEventListener('submit', handleSaveEvent);
-  document.getElementById('settings-form').addEventListener('submit', handleSaveConfig);
-  document.getElementById('btn-delete-event').addEventListener('click', handleDeleteCurrentEvent);
-
-  // Test Buttons
-  document.getElementById('btn-test-email').addEventListener('click', handleTestEmail);
-  document.getElementById('btn-test-whatsapp').addEventListener('click', handleTestWhatsApp);
-  document.getElementById('btn-refresh-logs').addEventListener('click', loadLogs);
-
-  // Transit checkbox toggle
-  document.getElementById('event-has-transit').addEventListener('change', (e) => {
-    document.getElementById('transit-fields').style.display = e.target.checked ? 'block' : 'none';
-  });
-}
-
-// Load Events from API
+// ---------------- EVENTS ----------------
 async function loadEvents() {
   try {
-    const res = await window.api.getEvents(currentDate, currentTenantId);
+    const res = await window.api.getEvents(currentDate, currentTenantId, searchQuery);
     eventsList = res.data || [];
     renderTimeline();
     updateProgress();
@@ -199,23 +251,31 @@ async function loadEvents() {
   }
 }
 
-// Render Timeline
 function renderTimeline() {
   const container = document.getElementById('timeline-container');
   container.innerHTML = '';
 
-  if (eventsList.length === 0) {
+  let filtered = eventsList;
+  if (currentFilter === 'urgent') {
+    filtered = eventsList.filter(e => !e.completed && (e.priority === 'high' || (e.minutesLeft !== null && e.minutesLeft <= 10)));
+  } else if (currentFilter === 'pending') {
+    filtered = eventsList.filter(e => !e.completed);
+  } else if (currentFilter === 'completed') {
+    filtered = eventsList.filter(e => e.completed);
+  }
+
+  if (filtered.length === 0) {
     container.innerHTML = `
       <div class="empty-state">
         <span class="icon">🌴</span>
         <h3>Sin compromisos agendados</h3>
-        <p>Toca el botón <strong>+</strong> abajo para agregar tu primera actividad para este perfil.</p>
+        <p>Toca el botón <strong>+</strong> abajo para agregar tu primera actividad.</p>
       </div>
     `;
     return;
   }
 
-  eventsList.forEach((event) => {
+  filtered.forEach((event) => {
     // If transit node exists before event
     if (event.transitBefore && event.transitBefore.text) {
       const transitEl = document.createElement('div');
@@ -223,11 +283,6 @@ function renderTimeline() {
       transitEl.innerHTML = `<span>${event.transitBefore.icon || '🚗'} ${event.transitBefore.text}</span>`;
       container.appendChild(transitEl);
     }
-
-    // Event Card
-    const card = document.createElement('div');
-    card.className = `event-card ${event.completed ? 'completed' : ''}`;
-    card.dataset.id = event.id;
 
     // Determine Countdown Badge
     let countdownBadgeHtml = '';
@@ -241,20 +296,53 @@ function renderTimeline() {
       }
     }
 
-    card.innerHTML = `
-      <div class="icon-box">${event.icon || '📌'}</div>
-      <div class="info" onclick="handleCardClick('${event.id}', event)">
-        <div class="time-row">
-          <span class="time">${event.timeDisplay || event.time}</span>
-          ${event.tenantName ? `<span class="card-tenant-tag">${event.tenantIcon || '🏢'} ${event.tenantName}</span>` : ''}
-          ${countdownBadgeHtml}
+    // Subtasks HTML
+    let subtasksHtml = '';
+    if (Array.isArray(event.subtasks) && event.subtasks.length > 0) {
+      subtasksHtml = `
+        <div class="subtasks-section">
+          ${event.subtasks.map(s => `
+            <div class="subtask-item ${s.completed ? 'done' : ''}" onclick="handleToggleSubtask('${event.id}', '${s.id}', event)">
+              <div class="subtask-checkbox">${s.completed ? '✓' : ''}</div>
+              <span>${s.text}</span>
+            </div>
+          `).join('')}
         </div>
-        <div class="title">${event.title}</div>
-        <div class="tag">${event.tag || 'Compromiso agendado'}</div>
-        ${event.location ? `<div class="location-snippet">📍 ${event.location}</div>` : ''}
+      `;
+    }
+
+    // Priority class
+    const priorityClass = `priority-${event.priority || 'normal'}`;
+
+    // Event Card
+    const card = document.createElement('div');
+    card.className = `event-card ${event.completed ? 'completed' : ''} ${priorityClass}`;
+    card.dataset.id = event.id;
+
+    card.innerHTML = `
+      <div class="card-main-row">
+        <div class="icon-box" onclick="handleCardClick('${event.id}', event)">${event.icon || '📌'}</div>
+        <div class="info" onclick="handleCardClick('${event.id}', event)">
+          <div class="time-row">
+            <span class="time">${event.timeDisplay || event.time}</span>
+            ${event.tenantName ? `<span class="card-tenant-tag">${event.tenantIcon || '🏢'} ${event.tenantName}</span>` : ''}
+            ${countdownBadgeHtml}
+          </div>
+          <div class="title">${event.title}</div>
+          <div class="tag">${event.tag || 'Compromiso agendado'}</div>
+          ${event.location ? `<div class="location-snippet">📍 ${event.location}</div>` : ''}
+        </div>
+        <div class="check-circle" onclick="handleToggleEvent('${event.id}', event)">
+          <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+        </div>
       </div>
-      <div class="check-circle" onclick="handleToggleEvent('${event.id}', event)">
-        <svg viewBox="0 0 24 24"><path d="M5 13l4 4L19 7"></path></svg>
+      ${subtasksHtml}
+      <div class="card-actions-toolbar">
+        ${event.location ? `<a href="${event.mapsUrl || `https://maps.google.com/?q=${encodeURIComponent(event.location)}`}" target="_blank" class="card-action-btn" onclick="event.stopPropagation()">🗺️ Navegar</a>` : `<span></span>`}
+        <div style="display:flex; gap:6px;">
+          <button class="card-action-btn" onclick="handlePostpone('${event.id}', 15, event)">⏱️ +15m</button>
+          <button class="card-action-btn" onclick="handleCardClick('${event.id}', event)">✏️ Editar</button>
+        </div>
       </div>
     `;
 
@@ -262,13 +350,23 @@ function renderTimeline() {
   });
 }
 
-// Toggle Task Completed
+// Toggle Task Completed with Sound & Haptics
 async function handleToggleEvent(id, e) {
   if (e) e.stopPropagation();
   try {
     const res = await window.api.toggleEvent(id);
     const updated = res.data;
     
+    // Play sound and haptic if completed
+    if (updated.completed) {
+      soundEffects.playSuccess();
+      triggerHaptic([40, 60, 40]);
+      showToast(`¡"${updated.title}" completado! 🎉`, 'success');
+    } else {
+      soundEffects.playPop();
+      triggerHaptic(25);
+    }
+
     // Update local state
     const idx = eventsList.findIndex(ev => ev.id === id);
     if (idx !== -1) {
@@ -282,14 +380,47 @@ async function handleToggleEvent(id, e) {
   }
 }
 
+// Postpone Event
+async function handlePostpone(id, minutes = 15, e) {
+  if (e) e.stopPropagation();
+  try {
+    const res = await window.api.postponeEvent(id, minutes);
+    soundEffects.playPop();
+    triggerHaptic(30);
+    showToast(`Pospuesto +${minutes} min (${res.data.timeDisplay})`, 'info');
+    loadEvents();
+  } catch (err) {
+    showToast('Error posponiendo: ' + err.message, 'error');
+  }
+}
+
+// Toggle Subtask
+async function handleToggleSubtask(eventId, subtaskId, e) {
+  if (e) e.stopPropagation();
+  try {
+    const res = await window.api.toggleSubtask(eventId, subtaskId);
+    soundEffects.playPop();
+    triggerHaptic(20);
+    const idx = eventsList.findIndex(ev => ev.id === eventId);
+    if (idx !== -1) {
+      eventsList[idx] = res.data;
+    }
+    renderTimeline();
+  } catch (err) {
+    showToast('Error en subtarea: ' + err.message, 'error');
+  }
+}
+
 // Update Progress Bar
 function updateProgress() {
   const total = eventsList.length;
   const completed = eventsList.filter(e => e.completed).length;
   const pct = total === 0 ? 0 : Math.round((completed / total) * 100);
 
-  document.getElementById('progress-bar').style.width = `${pct}%`;
-  document.getElementById('progress-text').innerText = `${completed}/${total} listas (${pct}%)`;
+  const bar = document.getElementById('progress-bar');
+  if (bar) bar.style.width = `${pct}%`;
+  const text = document.getElementById('progress-text');
+  if (text) text.innerText = `${completed}/${total} listas (${pct}%)`;
 }
 
 // Live Countdown Updater
@@ -316,12 +447,100 @@ function updateLiveCountdowns() {
   }
 }
 
-// Open / Close Event Modal
+// Icon Selector
+function initIconSelectors() {
+  const choices = document.querySelectorAll('.icon-choice');
+  choices.forEach(choice => {
+    choice.addEventListener('click', () => {
+      choices.forEach(c => c.classList.remove('selected'));
+      choice.classList.add('selected');
+      selectedIcon = choice.dataset.icon;
+      soundEffects.playPop();
+    });
+  });
+}
+
+// Event Listeners
+function initEventListeners() {
+  // Custom date picker
+  document.getElementById('custom-date-picker')?.addEventListener('change', (e) => {
+    if (e.target.value) setDate(e.target.value);
+  });
+
+  // Search input
+  const searchInput = document.getElementById('search-input');
+  const clearSearchBtn = document.getElementById('btn-clear-search');
+  if (searchInput) {
+    searchInput.addEventListener('input', (e) => {
+      searchQuery = e.target.value;
+      if (clearSearchBtn) clearSearchBtn.style.display = searchQuery ? 'block' : 'none';
+      loadEvents();
+    });
+  }
+  if (clearSearchBtn) {
+    clearSearchBtn.addEventListener('click', () => {
+      searchInput.value = '';
+      searchQuery = '';
+      clearSearchBtn.style.display = 'none';
+      loadEvents();
+    });
+  }
+
+  // Filter chips
+  document.querySelectorAll('.filter-chip').forEach(chip => {
+    chip.addEventListener('click', (e) => {
+      document.querySelectorAll('.filter-chip').forEach(c => c.classList.remove('active'));
+      chip.classList.add('active');
+      currentFilter = chip.dataset.filter;
+      soundEffects.playPop();
+      renderTimeline();
+    });
+  });
+
+  // Modal Triggers
+  document.getElementById('fab-add-btn')?.addEventListener('click', () => openEventModal());
+  document.getElementById('btn-close-event-modal')?.addEventListener('click', () => closeEventModal());
+  document.getElementById('btn-settings-open')?.addEventListener('click', () => openSettingsModal());
+  document.getElementById('btn-close-settings-modal')?.addEventListener('click', () => closeSettingsModal());
+  document.getElementById('btn-stats-open')?.addEventListener('click', () => openStatsModal());
+  document.getElementById('btn-close-stats-modal')?.addEventListener('click', () => closeStatsModal());
+  document.getElementById('btn-close-tenant-modal')?.addEventListener('click', () => closeTenantModal());
+
+  // Forms
+  document.getElementById('event-form')?.addEventListener('submit', handleSaveEvent);
+  document.getElementById('tenant-form')?.addEventListener('submit', handleSaveTenant);
+  document.getElementById('settings-form')?.addEventListener('submit', handleSaveConfig);
+  document.getElementById('btn-delete-event')?.addEventListener('click', handleDeleteCurrentEvent);
+
+  // Subtask Add Button in Form
+  document.getElementById('btn-add-form-subtask')?.addEventListener('click', handleAddFormSubtask);
+
+  // Export iCal
+  document.getElementById('btn-export-ical')?.addEventListener('click', () => {
+    window.location.href = `/api/events/export/ics?tenantId=${currentTenantId}`;
+    showToast('Descargando calendario iCal (.ics)...', 'success');
+  });
+
+  // Test Buttons
+  document.getElementById('btn-test-email')?.addEventListener('click', handleTestEmail);
+  document.getElementById('btn-test-whatsapp')?.addEventListener('click', handleTestWhatsApp);
+  document.getElementById('btn-refresh-logs')?.addEventListener('click', loadLogs);
+
+  // Transit toggle
+  document.getElementById('event-has-transit')?.addEventListener('change', (e) => {
+    document.getElementById('transit-fields').style.display = e.target.checked ? 'block' : 'none';
+  });
+}
+
+// ---------------- MODAL MANAGEMENT ----------------
 function openEventModal(eventId = null) {
+  soundEffects.playPop();
   editingEventId = eventId;
   const modal = document.getElementById('event-modal');
   const titleEl = document.getElementById('event-modal-title');
   const btnDelete = document.getElementById('btn-delete-event');
+  const subtasksListEl = document.getElementById('form-subtasks-list');
+  subtasksListEl.innerHTML = '';
 
   if (eventId) {
     const event = eventsList.find(e => e.id === eventId);
@@ -333,6 +552,7 @@ function openEventModal(eventId = null) {
     document.getElementById('event-title').value = event.title || '';
     document.getElementById('event-date').value = event.date || currentDate;
     document.getElementById('event-time').value = event.time || '10:00';
+    document.getElementById('event-priority').value = event.priority || 'normal';
     document.getElementById('event-tag').value = event.tag || '';
     document.getElementById('event-location').value = event.location || '';
     document.getElementById('event-notes').value = event.notes || '';
@@ -350,6 +570,11 @@ function openEventModal(eventId = null) {
       document.getElementById('event-transit-text').value = '';
     }
 
+    // Subtasks
+    if (Array.isArray(event.subtasks)) {
+      event.subtasks.forEach(s => renderFormSubtaskItem(s.text, s.completed));
+    }
+
     selectedIcon = event.icon || '📌';
   } else {
     titleEl.innerText = 'Nuevo Compromiso';
@@ -358,6 +583,7 @@ function openEventModal(eventId = null) {
     document.getElementById('event-tenant-select').value = currentTenantId !== 'all' ? currentTenantId : 'renace';
     document.getElementById('event-date').value = currentDate;
     document.getElementById('event-time').value = '10:00';
+    document.getElementById('event-priority').value = 'normal';
     document.getElementById('event-has-transit').checked = false;
     document.getElementById('transit-fields').style.display = 'none';
     document.getElementById('event-notify-email').checked = true;
@@ -383,6 +609,28 @@ function handleCardClick(id, e) {
   openEventModal(id);
 }
 
+// Subtask management inside Event Form
+function handleAddFormSubtask() {
+  const input = document.getElementById('form-new-subtask-input');
+  const text = input.value.trim();
+  if (!text) return;
+  renderFormSubtaskItem(text, false);
+  input.value = '';
+  input.focus();
+}
+
+function renderFormSubtaskItem(text, completed = false) {
+  const container = document.getElementById('form-subtasks-list');
+  const item = document.createElement('div');
+  item.style = 'display:flex; align-items:center; gap:8px; margin-bottom:6px;';
+  item.innerHTML = `
+    <input type="checkbox" ${completed ? 'checked' : ''} class="form-subtask-check" style="accent-color:var(--accent);">
+    <input type="text" value="${text}" class="form-input form-subtask-text" style="flex:1; padding:6px 10px; font-size:12px;">
+    <button type="button" style="background:none; border:none; color:#ef4444; font-size:14px; cursor:pointer;" onclick="this.parentElement.remove()">✕</button>
+  `;
+  container.appendChild(item);
+}
+
 // Save Event (Create or Update)
 async function handleSaveEvent(e) {
   e.preventDefault();
@@ -391,6 +639,7 @@ async function handleSaveEvent(e) {
   const title = document.getElementById('event-title').value.trim();
   const date = document.getElementById('event-date').value;
   const time = document.getElementById('event-time').value;
+  const priority = document.getElementById('event-priority').value;
   const tag = document.getElementById('event-tag').value.trim();
   const location = document.getElementById('event-location').value.trim();
   const notes = document.getElementById('event-notes').value.trim();
@@ -400,15 +649,25 @@ async function handleSaveEvent(e) {
   const hasTransit = document.getElementById('event-has-transit').checked;
   const transitText = document.getElementById('event-transit-text').value.trim();
 
+  // Collect Subtasks
+  const subtaskElements = document.querySelectorAll('#form-subtasks-list > div');
+  const subtasks = Array.from(subtaskElements).map(el => ({
+    id: Math.random().toString(36).substring(2, 9),
+    text: el.querySelector('.form-subtask-text').value.trim(),
+    completed: el.querySelector('.form-subtask-check').checked
+  })).filter(s => s.text);
+
   const eventPayload = {
     tenantId,
     title,
     date,
     time,
+    priority,
     tag: tag || 'General',
     location,
     notes,
     icon: selectedIcon,
+    subtasks,
     notifyEmail,
     notifyWhatsApp,
     transitBefore: hasTransit && transitText ? { icon: '🚗', text: transitText } : null
@@ -423,6 +682,7 @@ async function handleSaveEvent(e) {
       showToast('Compromiso agendado correctamente', 'success');
     }
 
+    soundEffects.playPop();
     closeEventModal();
     loadEvents();
   } catch (err) {
@@ -445,7 +705,56 @@ async function handleDeleteCurrentEvent() {
   }
 }
 
-// Settings & Config
+// ---------------- TENANT MODAL ----------------
+function openTenantModal() {
+  soundEffects.playPop();
+  document.getElementById('tenant-modal').classList.add('open');
+}
+
+function closeTenantModal() {
+  document.getElementById('tenant-modal').classList.remove('open');
+}
+
+async function handleSaveTenant(e) {
+  e.preventDefault();
+  const name = document.getElementById('new-tenant-name').value.trim();
+  const icon = document.getElementById('new-tenant-icon').value.trim() || '🏢';
+  const badge = document.getElementById('new-tenant-badge').value.trim() || 'Cliente';
+  const notifyEmail = document.getElementById('new-tenant-email').value.trim();
+  const notifyPhone = document.getElementById('new-tenant-phone').value.trim();
+
+  try {
+    await window.api.createTenant({ name, icon, badge, notifyEmail, notifyPhone });
+    showToast(`Perfil "${name}" creado exitosamente`, 'success');
+    closeTenantModal();
+    await loadTenants();
+  } catch (err) {
+    showToast('Error creando tenant: ' + err.message, 'error');
+  }
+}
+
+// ---------------- STATS MODAL ----------------
+async function openStatsModal() {
+  soundEffects.playPop();
+  const modal = document.getElementById('stats-modal');
+  try {
+    const res = await window.api.getAnalytics(currentTenantId);
+    const data = res.data;
+    document.getElementById('stat-total').innerText = data.total;
+    document.getElementById('stat-completed').innerText = data.completed;
+    document.getElementById('stat-rate').innerText = `${data.completionRate}%`;
+    document.getElementById('stat-urgent').innerText = data.priorityBreakdown.high;
+    modal.classList.add('open');
+  } catch (err) {
+    showToast('Error cargando estadísticas', 'error');
+  }
+}
+
+function closeStatsModal() {
+  document.getElementById('stats-modal').classList.remove('open');
+}
+
+// ---------------- SETTINGS & CONFIG ----------------
 async function loadConfig() {
   try {
     const res = await window.api.getConfig();
@@ -457,7 +766,7 @@ async function loadConfig() {
     document.getElementById('cfg-evo-instance').value = cfg.evoInstance || 'RENACE.TECH';
     document.getElementById('cfg-evo-url').value = cfg.evoApiUrl || 'https://evoapi.renace.tech';
 
-    // Check Insforge status
+    // Insforge Status
     const statusRes = await window.api.getStatus();
     const insforgeInfo = statusRes.data?.insforge;
     if (insforgeInfo) {
@@ -475,6 +784,7 @@ async function loadConfig() {
 }
 
 function openSettingsModal() {
+  soundEffects.playPop();
   loadConfig();
   loadLogs();
   document.getElementById('settings-modal').classList.add('open');
@@ -504,7 +814,7 @@ async function handleSaveConfig(e) {
   }
 }
 
-// Notification Tests
+// ---------------- TESTS ----------------
 async function handleTestEmail() {
   const btn = document.getElementById('btn-test-email');
   btn.disabled = true;
@@ -543,7 +853,7 @@ async function handleTestWhatsApp() {
   }
 }
 
-// Load Logs
+// ---------------- LOGS ----------------
 async function loadLogs() {
   const logsContainer = document.getElementById('logs-container');
   logsContainer.innerHTML = '<div style="font-size:12px; color:#94a3b8;">Cargando historial...</div>';
@@ -577,7 +887,7 @@ async function loadLogs() {
   }
 }
 
-// Toast Notifications
+// ---------------- TOAST ----------------
 function showToast(message, type = 'info') {
   const container = document.getElementById('toast-container');
   const toast = document.createElement('div');
