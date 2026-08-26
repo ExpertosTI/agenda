@@ -1,0 +1,54 @@
+version: '3.8'
+
+services:
+  agenda-app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    container_name: agenda-renace-app
+    restart: unless-stopped
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+      - APP_URL=https://agenda.renace.tech
+      - DATA_DIR=/app/data
+      - SMTP_HOST=${SMTP_HOST:-smtp.hostinger.com}
+      - SMTP_PORT=${SMTP_PORT:-465}
+      - SMTP_SECURE=${SMTP_SECURE:-true}
+      - SMTP_USER=${SMTP_USER:-info@renace.tech}
+      - SMTP_PASS=${SMTP_PASS:-JustWork2027@}
+      - SMTP_FROM=${SMTP_FROM:-RENACE Agenda <info@renace.tech>}
+      - DEFAULT_NOTIFY_EMAIL=${DEFAULT_NOTIFY_EMAIL:-info@renace.tech}
+      - EVO_API_URL=${EVO_API_URL:-https://evoapi.renace.tech}
+      - EVO_API_KEY=${EVO_API_KEY:-B6D711FCDE4D4FD5936544120E713976}
+      - EVO_INSTANCE=${EVO_INSTANCE:-RENACE.TECH}
+      - DEFAULT_NOTIFY_PHONE=${DEFAULT_NOTIFY_PHONE:-18093487921}
+      - ALERT_MINUTES_FIRST=10
+      - ALERT_MINUTES_SECOND=5
+    volumes:
+      - ../data:/app/data
+    networks:
+      - traefik-net
+    labels:
+      - "traefik.enable=true"
+      # HTTP Router (redirect to HTTPS)
+      - "traefik.http.routers.agenda-http.rule=Host(`agenda.renace.tech`)"
+      - "traefik.http.routers.agenda-http.entrypoints=web"
+      - "traefik.http.routers.agenda-http.middlewares=agenda-redirect-ssl"
+      - "traefik.http.middlewares.agenda-redirect-ssl.redirectscheme.scheme=https"
+      # HTTPS Router
+      - "traefik.http.routers.agenda-https.rule=Host(`agenda.renace.tech`)"
+      - "traefik.http.routers.agenda-https.entrypoints=websecure"
+      - "traefik.http.routers.agenda-https.tls=true"
+      - "traefik.http.routers.agenda-https.tls.certresolver=letsencrypt"
+      # Middlewares (Compression & Security)
+      - "traefik.http.routers.agenda-https.middlewares=agenda-compress,agenda-security"
+      - "traefik.http.middlewares.agenda-compress.compress=true"
+      - "traefik.http.middlewares.agenda-security.headers.browserXSSFilter=true"
+      - "traefik.http.middlewares.agenda-security.headers.contentTypeNosniff=true"
+      # Internal Service Port
+      - "traefik.http.services.agenda-service.loadbalancer.server.port=3000"
+
+networks:
+  traefik-net:
+    external: true

@@ -1,0 +1,14 @@
+{
+  "smtpHost": "smtp.hostinger.com",
+  "smtpPort": 465,
+  "smtpSecure": true,
+  "smtpUser": "info@renace.tech",
+  "smtpFrom": "RENACE Agenda <info@renace.tech>",
+  "defaultNotifyEmail": "info@renace.tech",
+  "evoApiUrl": "https://evoapi.renace.tech",
+  "evoApiKey": "B6D711FCDE4D4FD5936544120E713976",
+  "evoInstance": "RENACE.TECH",
+  "defaultNotifyPhone": "18093487921",
+  "alertMinutesFirst": 10,
+  "alertMinutesSecond": 5
+}
