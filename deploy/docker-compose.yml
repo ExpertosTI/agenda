@@ -1,10 +1,11 @@
+version: '3.8'
+
 services:
   agenda-app:
+    image: agenda_app:latest
     build:
       context: ..
       dockerfile: deploy/Dockerfile
-    container_name: agenda-renace-app
-    restart: unless-stopped
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -24,27 +25,44 @@ services:
       - ALERT_MINUTES_FIRST=10
       - ALERT_MINUTES_SECOND=5
     volumes:
-      - ../data:/app/data
+      - /opt/agenda/data:/app/data
     networks:
       - RenaceNet
+    deploy:
+      replicas: 1
+      restart_policy:
+        condition: on-failure
+      resources:
+        limits:
+          cpus: '0.50'
+          memory: 512M
+      labels:
+        - "traefik.enable=true"
+        - "traefik.docker.network=RenaceNet"
+        
+        # 1. HTTP Router
+        - "traefik.http.routers.agenda-web.entrypoints=web"
+        - "traefik.http.routers.agenda-web.rule=Host(`agenda.renace.tech`)"
+        
+        # 2. HTTPS Router
+        - "traefik.http.routers.agenda-secure.entrypoints=websecure"
+        - "traefik.http.routers.agenda-secure.rule=Host(`agenda.renace.tech`)"
+        - "traefik.http.routers.agenda-secure.tls=true"
+        - "traefik.http.routers.agenda-secure.tls.certresolver=letsencryptresolver"
+        
+        # 3. Service Port
+        - "traefik.http.services.agenda-app.loadbalancer.server.port=3000"
+
     labels:
       - "traefik.enable=true"
       - "traefik.docker.network=RenaceNet"
-      
-      # 1. HTTP Router
       - "traefik.http.routers.agenda-web.entrypoints=web"
       - "traefik.http.routers.agenda-web.rule=Host(`agenda.renace.tech`)"
-      - "traefik.http.routers.agenda-web.service=agenda-svc"
-      
-      # 2. HTTPS Router
       - "traefik.http.routers.agenda-secure.entrypoints=websecure"
       - "traefik.http.routers.agenda-secure.rule=Host(`agenda.renace.tech`)"
       - "traefik.http.routers.agenda-secure.tls=true"
       - "traefik.http.routers.agenda-secure.tls.certresolver=letsencryptresolver"
-      - "traefik.http.routers.agenda-secure.service=agenda-svc"
-      
-      # 3. Load Balancer Service Port
-      - "traefik.http.services.agenda-svc.loadbalancer.server.port=3000"
+      - "traefik.http.services.agenda-app.loadbalancer.server.port=3000"
 
 networks:
   RenaceNet:
